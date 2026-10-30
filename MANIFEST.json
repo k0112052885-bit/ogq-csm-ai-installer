@@ -1,23 +1,23 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-30T07:34:04.171Z",
+  "builtAt": "2026-10-30T08:01:55.206Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "877214d654937edc6977559d9988300f65d4d5083e212569906966741424f852",
-      "size": 7713
+      "sha256": "7a836a880d31316efce907c811f33808eb44f2a19dfda92cc2b0a6574944dce3",
+      "size": 8512
     },
     "README.md": {
       "sha256": "3f3a7b0e29cb7c0b1c6f10593bd8eca9b5153f24f888f092db2161b526e95ada",
       "size": 489
     },
     "START_HERE_AI.md": {
-      "sha256": "877214d654937edc6977559d9988300f65d4d5083e212569906966741424f852",
-      "size": 7713
+      "sha256": "7a836a880d31316efce907c811f33808eb44f2a19dfda92cc2b0a6574944dce3",
+      "size": 8512
     },
     "package.json": {
       "sha256": "f6e7cfcbb30bb17a01f3b73df9c350c02becd7a85db8cfe15050348cb1b057e5",
@@ -34,6 +34,10 @@
     "scripts/employee-setup.mjs": {
       "sha256": "8fe8df14e206ed56a51172224ab904e7d0d5aa6577794cc97e63d2332aa726e2",
       "size": 6892
+    },
+    "scripts/employee-verify.mjs": {
+      "sha256": "2098cc85335a6169a3b01184d80f49f2472476d1948349d025eaf31690bfbe68",
+      "size": 2676
     },
     "scripts/identity.mjs": {
       "sha256": "d48ecba97c197681af9726d057611e59b8cd3338be6bf1af81c98ed301987e9b",
@@ -70,6 +74,10 @@
     "src/identity.mjs": {
       "sha256": "bb369e482d9409f900768816c2bd6ce637f968d44c7d74f3ef129dab16620b75",
       "size": 14042
+    },
+    "src/live-evidence.mjs": {
+      "sha256": "8517baf9f9b2e78ea9da00334e9a5adac740b8d0ccf0f70e934272ea99daf1df",
+      "size": 9439
     },
     "src/model.mjs": {
       "sha256": "7ccb01b05f36c1365b36cfd896e59397da9a60df46f2a4b6cd6179d560bceb26",
