@@ -1,19 +1,58 @@
-# OGQ Claude 사용량 수집기 — AI 자동 설치 실행 지시문
+# Install the OGQ Claude usage reporter (instructions for an AI agent)
 
-이 문서를 전달받은 AI는 설명만 하지 말고 저장소를 내려받아 설치·테스트를 실제 실행하세요.
+This repository is **code only** (version 0.1.0). It holds NO invitation, signing key, token, account data or admin file. You are helping an employee install a small
+background reporter on THEIR OWN Mac. It reports Claude plan usage percentages (5-hour / 7-day) for the shared subscription the owner assigned to this device, by FILE HANDOFF.
+Read all of this first.
 
-공개 저장소: https://github.com/k0112052885-bit/ogq-csm-ai-installer
-필수 실행 절차: 이 저장소의 AI_INSTALL.md에서 **Quick path: link registration**을 먼저 읽으세요.
+## Ground rules (do not break these)
+1. Work only inside this clone, the device kit folder and `~/.ogq-csm`. Never read or edit `~/.claude`, Claude settings, credentials, keychain or browser data.
+2. Every command prints ONE JSON line. If it prints `needsConsent`, show the human the `question` text verbatim and re-run with the named flag ONLY after they say yes. Never invent consent, never run `sudo`.
+3. The per-device **invitation** is private and single use. Never commit, push, upload, paste into chat or any web service, or copy it into this clone. Never run `git push` or `git commit` here.
+4. Never print or send `~/.ogq-csm/device`, `~/.ogq-csm/private`, `~/.ogq-csm/data/identity-*`, `install.json` or anything holding a key. Only `outbox/enroll-request.json` and `outbox/readings/*.json` go to the owner.
+5. Enrollment is **admin-mediated and NOT automatic**: after `enroll` the device stays `PENDING_ADMIN_APPROVAL` until the owner approves it. Report installation and admin approval as two separate statements; never claim approval early.
 
-대상: 김형기 직원 1명, Mac 2대, 계정 3개 — 김형기1(Max 20x), 김형기2(Max 20x), 김형기3(Max 5x).
+## Quick path: link registration (default - no kit, no invitation, no fingerprint to type)
+The human gives you ONE thing besides this repository: the **dashboard address** (an https address such as `https://dashboard.example.com`) and a **short name** for this Mac's subscription (letters, digits, space . _ -; never an e-mail). Nothing secret is needed: registration only creates a PENDING request that the owner must approve in the dashboard.
+1. `node scripts/employee-install.mjs install --server <dashboard address> --label <short name> --consent-install` (add `--profile <name> --claude-config-dir <absolute folder>` ONLY for a second Claude account on the same Mac, each profile with its own config folder and login; the default install needs neither).
+2. From now on run every command from the INSTALLED copy, not from this clone: `node ~/.ogq-csm/app/scripts/employee-install.mjs <command>` (a profile install lives in `~/.ogq-csm-<profile>/app/scripts/`). The installed copy always uses its own folder, so two accounts on one Mac never mix. `status` prints `next`; follow it: `sdk --consent-sdk`, `observe --consent-observe`, `bind --consent-bind`. Before `bind`, ask the human whether the account logged in for THIS install (for a profile: the one logged in under its own `--claude-config-dir`) is the one meant.
+3. **Register**: `join --consent-join`. It prints a **verification code**. If it says registration is closed, ask the owner to open it (Devices page, "link registration window") and run `join` again.
+4. Tell the human to read the verification code to the owner. The owner types it in the dashboard and chooses which subscription this Mac reports for. State `PENDING_ADMIN_APPROVAL` until then; never claim approval early.
+5. `install-agents --consent-agents`. The background agents pick up the owner's signed approval by themselves and start sending readings; `finalize` does the same on demand.
+6. Report two separate lines: (a) installation phase from `status`; (b) owner approval: PENDING or APPROVED. Done when `status` shows phase `RUNNING`.
+Everything above runs through the same consent prompts; the human must say yes to each.
+**Pin the code:** check out the commit the owner named and confirm `git rev-parse HEAD` equals it. If no commit was named, tell the human you would be installing whatever the repository holds today and continue only if they agree. The integrity manifest in this repository detects accidental damage only; the owner's commit is the trust anchor.
+**Limits you must state, not hide:** a second Claude account on the same Mac needs its own Claude login in its own config folder (`CLAUDE_CONFIG_DIR=<folder> claude`, then log in); this installer cannot create that login. Registration works only while the owner has opened the window; if the HTTPS address does not answer, stop and tell the human.
 
-1. GitHub 저장소를 clone하고 Node.js 20+, macOS, 기존 설치·Claude 로그인 상태를 확인하세요. 기존 데이터와 인증정보를 변경하거나 삭제하지 마세요.
-2. **기존의 ZIP 등록 키트, invite.json, 12자리 지문은 새 링크 등록 방식에 필요하지 않습니다.** 이전 방식으로 되돌아가지 마세요.
-3. 관리자 대시보드의 실제 **HTTPS 주소**를 확인하세요. 아직 전달받지 못했다면 환경 점검 및 다운로드까지 진행하고 관리자에게 HTTPS 주소와 링크 등록 창 개방만 요청하세요. 주소를 추측하거나 공개되지 않은 localhost 주소로 대신하지 마세요.
-4. 관리자 시스템에 링크 등록 창이 열린 상태에서 AI_INSTALL.md Quick path의 install --server --label, sdk, observe, bind, join, install-agents, finalize/status 순서로 진행하세요. 사용자의 실제 동의를 요구하는 플래그는 확인을 받아야 합니다.
-5. join 이후 관리자 화면에 기기 등록 요청이 나타나면 관리자가 직접 계정을 선택하고 확인 코드를 대조해 승인해야 합니다. 직원에게 별도 ZIP 또는 지문을 요구하지 마세요.
-6. 같은 Mac에서 두 번째 Claude 계정을 사용하는 경우 Quick path의 --profile 및 --claude-config-dir를 사용해 별도 프로필·자동실행을 구성하세요. 실제 로그인과 수집 대상이 다르면 멈추고 오류를 보고하세요.
-7. 승인 후 5시간·7일 실제 수집, 중복 집계 방지, 재부팅 후 수집 재개, 관리자 화면 반영을 확인하세요. 인위적으로 만든 기록을 실측으로 표시하지 마세요.
-8. 완료 결과는 Mac별·계정별 설치/승인/수집/자동실행 상태를 구분해 보고하세요. 실행 가능한 작업을 중간 설명 때문에 멈추지 마세요.
+## Alternative path: private device kit (only if the owner hands you one)
+## Step 0 - get what only the owner can give (secure handoff, NOT GitHub)
+You need two things from the owner, each for THIS Mac (one kit per device; a kit is bound to one account and expires):
+- the **device kit folder** (contains `invite.json` and `package-config.json`), delivered by a private channel (AirDrop, encrypted message, in person). Keep it OUTSIDE this clone, e.g. `~/ogq-csm-kit`.
+- the **12-character fingerprint** of this code, given through a DIFFERENT channel than the kit (and the commit/tag to check out, if the owner named one).
+If either is missing or expired, STOP and ask the human to request it from the owner. Do not try to create or guess an invitation.
 
-주의: 관리자 HTTPS 주소와 관리자 승인은 직원 AI가 임의로 만들어낼 수 없습니다. 계정 비밀번호·토큰·개인키를 GitHub에 업로드하거나 채팅에 노출하지 마세요.
+## Steps
+Run from this clone (`node scripts/employee-install.mjs ...`; Node 20 or newer). After each step run `status`; its `next` field names the next command and consent question.
+1. **Check** (read-only): `node scripts/employee-install.mjs preflight --kit-dir <kit folder> --expect-fingerprint <12 chars>`. If a required check fails (integrity, fingerprint, invite), stop and tell the human.
+2. **Install**: `... install --kit-dir <kit folder> --expect-fingerprint <12 chars> --consent-install`. The invite moves into `~/.ogq-csm/private`. From now on use `node ~/.ogq-csm/app/scripts/employee-install.mjs <command>`.
+3. **SDK**: `... sdk --consent-sdk` (pinned Claude Agent SDK 0.3.301, needs internet; offline: `--sdk-from <folder>`).
+4. **Identify the Claude login** (the human must be logged in to the account for this device): `... observe --consent-observe`. If the e-mail is not available, stop.
+5. **Link it**: ask "is the account logged in on this Mac the one assigned to this device?" then `... bind --consent-bind`.
+6. **Enroll**: `... enroll --consent-enroll`. It prints a verification code and writes `~/.ogq-csm/outbox/enroll-request.json`.
+7. **Hand off to the owner** (the human does this, privately - not GitHub): send `enroll-request.json` and read out the verification code. The kit folder can then be deleted by the human.
+8. **Wait**: state `PENDING_ADMIN_APPROVAL`. When the owner returns `approval.json`, put it in `~/.ogq-csm/inbox/` and run `... finalize`.
+9. **Background agents** (launchd): `... install-agents --consent-agents`.
+10. **Report to the human, in two separate lines**: (a) installation state from `status` (phase, warnings); (b) admin approval: PENDING or APPROVED. Done only when `status` shows phase `RUNNING`.
+
+## Later
+- Health: `node ~/.ogq-csm/app/scripts/employee-install.mjs status`.
+- Update: pull the owner-named tag here, re-run preflight with the NEW fingerprint, then `... update --package-dir <this clone> --consent-update`.
+- Remove: `... uninstall --consent-uninstall` (`--purge` also deletes the device key; the device would then need a NEW kit).
+- One Mac keeps one Claude login linked at a time. Do not install a second account on the same Mac unless the owner says how.
+
+## If something fails
+| Symptom | What to do |
+| --- | --- |
+| integrity / fingerprint mismatch | stop; this clone is not the owner's build |
+| invite missing or expired | ask the owner for a new kit for this device |
+| observe: e-mail not available | this login cannot be linked; tell the owner |
+| finalize: still pending | nothing is wrong; the owner has not approved yet |

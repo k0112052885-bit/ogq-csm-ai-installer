@@ -574,7 +574,9 @@ const warn = (o, m) => o.warnings.push(m);
 
 export function nextStep(phase, cfg = null) {
   const self = cfg?.selfJoin === true;
-  const e = (command, consent = null) => ({ command: `node ${SCRIPT} ${command}`, consent, question: consent ? CONSENTS[consent] : null });
+  // a second account on one Mac (profile): every suggested command carries its profile, so running it from a clone can never act on another account's folder
+  const sfx = cfg?.profile ? ` --profile ${cfg.profile}` : "";
+  const e = (command, consent = null) => ({ command: `node ${SCRIPT} ${command}${sfx}`, consent, question: consent ? CONSENTS[consent] : null });
   switch (phase) {
     case "NOT_INSTALLED":
       return e("install --consent-install", "install");
@@ -589,12 +591,12 @@ export function nextStep(phase, cfg = null) {
     case "NEEDS_ENROLL":
       return self ? e("join --consent-join", "join") : e("enroll --consent-enroll", "enroll");
     case "PENDING_ADMIN_APPROVAL":
-      if (self) return { command: `node ${SCRIPT} finalize`, consent: null, question: null, note: "WAITING FOR THE OWNER. Read the verification code to the owner (they type it in the dashboard and choose the account). Install the background agents now (install-agents): they pick up the approval by themselves and start collecting. Or run this command again after the owner approved." };
+      if (self) return { command: `node ${SCRIPT} finalize${sfx}`, consent: null, question: null, note: "WAITING FOR THE OWNER. Read the verification code to the owner (they type it in the dashboard and choose the account). Install the background agents now (install-agents): they pick up the approval by themselves and start collecting. Or run this command again after the owner approved." };
       return { command: `node ${SCRIPT} finalize`, consent: null, question: null, note: "WAITING FOR THE ADMIN. Hand enroll-request.json and the verification code to the admin; when approval.json comes back, put it in the inbox folder (or pass --approval FILE) and run this command again." };
     case "APPROVED_NO_AGENTS":
       return e("install-agents --consent-agents", "agents");
     case "RUNNING":
-      return { command: `node ${SCRIPT} status`, consent: null, question: null, note: "Installed and running. Nothing else to do; readings are written to the outbox for the admin." };
+      return { command: `node ${SCRIPT} status${sfx}`, consent: null, question: null, note: "Installed and running. Nothing else to do; readings are written to the outbox for the admin." };
     default:
       return { command: null, consent: null, question: null };
   }
