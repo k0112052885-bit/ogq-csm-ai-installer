@@ -1,0 +1,14 @@
+# Defense in depth: nothing per-device or secret belongs in this repository.
+invite.json
+package-config.json
+device-kit*/
+*-kit/
+private/
+device/
+data/
+outbox/
+inbox/
+*.key
+*.pem
+.env*
+.DS_Store

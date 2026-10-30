@@ -1,0 +1,103 @@
+{
+  "schema": "csm-employee-package-manifest/v1",
+  "version": "0.1.0",
+  "builtAt": "2026-10-30T04:55:47.962Z",
+  "files": {
+    ".gitignore": {
+      "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
+      "size": 195
+    },
+    "AI_INSTALL.md": {
+      "sha256": "1bd9a8e4f765e0878aea0263c741f31828e795b3d1ec06d74c45a2ef6821c50b",
+      "size": 4787
+    },
+    "package.json": {
+      "sha256": "f6e7cfcbb30bb17a01f3b73df9c350c02becd7a85db8cfe15050348cb1b057e5",
+      "size": 133
+    },
+    "scripts/employee-install.mjs": {
+      "sha256": "3c72148666a658d25de190723f75eefda4ea5592aabf333c40782e32407eaa6e",
+      "size": 6820
+    },
+    "scripts/employee-poll.mjs": {
+      "sha256": "f8992dd4d5caa6327a2207a5eda3b8139490e76019e8d3b1392233cc672de608",
+      "size": 1302
+    },
+    "scripts/employee-setup.mjs": {
+      "sha256": "8fe8df14e206ed56a51172224ab904e7d0d5aa6577794cc97e63d2332aa726e2",
+      "size": 6892
+    },
+    "scripts/identity.mjs": {
+      "sha256": "d48ecba97c197681af9726d057611e59b8cd3338be6bf1af81c98ed301987e9b",
+      "size": 4040
+    },
+    "src/dates.mjs": {
+      "sha256": "bfba636877f2b9b5b88c87a78819a867ff2677349bbd63623390a8170b0341f2",
+      "size": 5182
+    },
+    "src/employee-installer.mjs": {
+      "sha256": "f573fdae6c50537b381dc722afa287e8f35fd9267bc87983c75624652a932cbe",
+      "size": 36361
+    },
+    "src/fleet-client.mjs": {
+      "sha256": "1769259338fbcb3af22bd8637e1f98829d8dab12f6cb28108e1fea7534f97a09",
+      "size": 3039
+    },
+    "src/fleet-crypto.mjs": {
+      "sha256": "c0d052251a13aeb3e27ae9e85970443df84739e0a8ba1aab3520407bd3a713a5",
+      "size": 2691
+    },
+    "src/fleet-device.mjs": {
+      "sha256": "21195f5faafe0c3abd97dc12cea252dcc92bdf8c2d70cd8271d40f4b85c0d8f5",
+      "size": 6135
+    },
+    "src/fleet-protocol.mjs": {
+      "sha256": "e582b090f5c2550c7b182505fe371c58fa2fafacefd5e161d7df63fd69434908",
+      "size": 941
+    },
+    "src/identity-observe.mjs": {
+      "sha256": "86188a9cbd69e3d0665cb2081db4ecf2ec6be97699bee2b41675f1b2b3ac72d7",
+      "size": 2151
+    },
+    "src/identity.mjs": {
+      "sha256": "bb369e482d9409f900768816c2bd6ce637f968d44c7d74f3ef129dab16620b75",
+      "size": 14042
+    },
+    "src/model.mjs": {
+      "sha256": "7ccb01b05f36c1365b36cfd896e59397da9a60df46f2a4b6cd6179d560bceb26",
+      "size": 7124
+    },
+    "src/official-usage-adapter.mjs": {
+      "sha256": "9f07a50cb133bd221fcf7c5b4dfbb7ae93b37f0c01ec6078f2d19b3a85bd4ebe",
+      "size": 4667
+    },
+    "src/package-manifest.mjs": {
+      "sha256": "5f2a71f4f82012c154ff270ebd9796fdc2eedc9dc2ed45b6ce493f9352db1326",
+      "size": 3471
+    },
+    "src/quota-schema.mjs": {
+      "sha256": "04e25ed18fdf8832be62e7b466c13149e72d2252aa3f023aadae93b13bca45f6",
+      "size": 3388
+    },
+    "src/resets-at.mjs": {
+      "sha256": "bbb7b30fd3f8f7c538cef18a7b9d0a34436c6b209275229a901b11ca998f929f",
+      "size": 727
+    },
+    "src/sdk-poller.mjs": {
+      "sha256": "647ec19a4df3ef36fda2de2b809f06f6a12623e4762e6cc7737679bc7b3cb3c3",
+      "size": 14799
+    },
+    "src/sdk-preflight.mjs": {
+      "sha256": "fe10dc631947c94fe8ad112fe5e23b4995e4ab8a1622b2f6282e8f7bebf8f52e",
+      "size": 9455
+    },
+    "src/sdk-usage-probe.mjs": {
+      "sha256": "e24397f4f33e626b03bd17b66cad73d35f2dfdf18127c4b726f5f21c8311dd34",
+      "size": 14960
+    },
+    "src/tempdir.mjs": {
+      "sha256": "cf2dd20c5b0c36ef602029c5453eaca157607c27be1b3c65bd78f236823c3a40",
+      "size": 852
+    }
+  }
+}
