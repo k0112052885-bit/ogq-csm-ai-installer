@@ -47,9 +47,9 @@ Run from this clone (`node scripts/employee-install.mjs ...`; Node 20 or newer).
 
 ## Later
 - Health: `node ~/.ogq-csm/app/scripts/employee-install.mjs status`.
-- Update: pull the owner-named commit or tag here, re-run `preflight --server <dashboard address> --label <short name>` (link mode shows no fingerprint and needs none; with a device kit use `--expect-fingerprint`), then `... update --package-dir <this clone> --consent-update`.
+- Update: pull the owner-named commit or tag here, re-run `preflight` (the address is built in; do not ask the human for one) (link mode shows no fingerprint and needs none; with a device kit use `--expect-fingerprint`), then `... update --package-dir <this clone> --consent-update`.
 - Remove: `... uninstall --consent-uninstall` (`--purge` also deletes the device key; the device would then need a NEW kit).
-- One Mac keeps one Claude login linked at a time. Do not install a second account on the same Mac unless the owner says how.
+- Each install links one Claude login. A second Claude account on the same Mac is installed only through the Quick path with its OWN `--profile <name> --claude-config-dir <absolute folder>` (a separate folder and login); never reuse the default install for it. With an owner device kit, do not install a second account on the same Mac unless the owner says how.
 
 ## If something fails
 | Symptom | What to do |

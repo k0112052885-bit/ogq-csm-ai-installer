@@ -259,12 +259,29 @@ export async function installSdk({ ctx, from = null }) {
   return { installed: pre.installed, version: pre.version, pinnedMatches: pre.version === REFERENCE_VERSION, compatible: pre.compat.ok };
 }
 
+/** The entry file of the SDK installed under THIS install's app folder, or null (not installed / no JavaScript entry found). */
+export function installedSdkEntry(appDir) {
+  const dir = path.join(appDir, "node_modules", "@anthropic-ai", "claude-agent-sdk");
+  const pkg = readJson(path.join(dir, "package.json"));
+  if (!pkg) return null;
+  const exp = pkg.exports;
+  const rels = [typeof exp === "string" ? exp : null, typeof exp?.["."] === "string" ? exp["."] : null, exp?.["."]?.import, exp?.["."]?.default, exp?.import, exp?.default, pkg.module, pkg.main, "sdk.mjs"].filter((r) => typeof r === "string");
+  for (const rel of rels) {
+    const abs = path.resolve(dir, rel);
+    if (abs.startsWith(dir + path.sep) && fs.existsSync(abs) && fs.statSync(abs).isFile()) return abs;
+  }
+  return null;
+}
+
 export async function observeLogin({ ctx, live = false, preflight: pf, probe }) {
   if (live) need(ctx, "observe");
   const L = layout(ctx.root);
   const config = readJson(pollerPaths(L.data).config);
   if (!config) throw new Error("install the package first");
-  return observeIdentity({ config, now: ctx.now, live, ...(pf ? { preflight: pf } : {}), ...(probe ? { probe } : {}) });
+  // The SDK belongs to THIS install (<root>/app/node_modules), not to whatever folder the running script lives in: a `status` suggestion run from the clone must still find it
+  // (the default lookup is relative to the script and would say "SDK not installed"). Not persisted: the poller agents run from the installed copy and need nothing stored.
+  const sdkModule = config.sdkModule ?? installedSdkEntry(L.app);
+  return observeIdentity({ config: sdkModule ? { ...config, sdkModule } : config, now: ctx.now, live, ...(pf ? { preflight: pf } : {}), ...(probe ? { probe } : {}) });
 }
 
 export function bindLogin({ ctx }) {
