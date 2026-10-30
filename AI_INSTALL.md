@@ -11,6 +11,17 @@ Read all of this first.
 4. Never print or send `~/.ogq-csm/device`, `~/.ogq-csm/private`, `~/.ogq-csm/data/identity-*`, `install.json` or anything holding a key. Only `outbox/enroll-request.json` and `outbox/readings/*.json` go to the owner.
 5. Enrollment is **admin-mediated and NOT automatic**: after `enroll` the device stays `PENDING_ADMIN_APPROVAL` until the owner approves it. Report installation and admin approval as two separate statements; never claim approval early.
 
+## Quick path: link registration (default - no kit, no invitation, no fingerprint to type)
+The human gives you ONE thing besides this repository: the **dashboard address** (an https address such as `https://dashboard.example.com`) and a **short name** for this Mac's subscription (letters, digits, space . _ -; never an e-mail). Nothing secret is needed: registration only creates a PENDING request that the owner must approve in the dashboard.
+1. `node scripts/employee-install.mjs install --server <dashboard address> --label <short name> --consent-install` (add `--profile <name> --claude-config-dir <absolute folder>` ONLY for a second Claude account on the same Mac, each profile with its own config folder and login; the default install needs neither).
+2. Then follow `next` from `status`: `sdk --consent-sdk`, `observe --consent-observe`, `bind --consent-bind` (use the same `--profile` if you used one; commands run from the installed copy find their own folder).
+3. **Register**: `join --consent-join`. It prints a **verification code**. If it says registration is closed, ask the owner to open it (Devices page, "link registration window") and run `join` again.
+4. Tell the human to read the verification code to the owner. The owner types it in the dashboard and chooses which subscription this Mac reports for. State `PENDING_ADMIN_APPROVAL` until then; never claim approval early.
+5. `install-agents --consent-agents`. The background agents pick up the owner's signed approval by themselves and start sending readings; `finalize` does the same on demand.
+6. Report two separate lines: (a) installation phase from `status`; (b) owner approval: PENDING or APPROVED. Done when `status` shows phase `RUNNING`.
+Everything above runs through the same consent prompts; the human must say yes to each. If the repository has a commit or tag named by the owner, check it out first.
+
+## Alternative path: private device kit (only if the owner hands you one)
 ## Step 0 - get what only the owner can give (secure handoff, NOT GitHub)
 You need two things from the owner, each for THIS Mac (one kit per device; a kit is bound to one account and expires):
 - the **device kit folder** (contains `invite.json` and `package-config.json`), delivered by a private channel (AirDrop, encrypted message, in person). Keep it OUTSIDE this clone, e.g. `~/ogq-csm-kit`.

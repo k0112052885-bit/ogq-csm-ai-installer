@@ -5,7 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { bindingFor, gateSourceFiles } from "./identity.mjs";
-import { ENROLL_SCHEMA, enrollBody, writePrivate } from "./fleet-protocol.mjs"; // NOT the registry: that module is admin-only
+import { ACCOUNT_ID_RE } from "./model.mjs";
+import { ENROLL_SCHEMA, JOIN_SCHEMA, enrollBody, joinBody, writePrivate } from "./fleet-protocol.mjs"; // NOT the registry: that module is admin-only
 import { generateKeyPair, hmacHex, keyId, sas, sign, verify } from "./fleet-crypto.mjs";
 
 export const DEVICE_FILE = "device.json";
@@ -40,16 +41,38 @@ export function enrollDevice({ deviceDir, invite, sourceDir, label, now = new Da
   return { request, sas: sas({ deviceId: invite.deviceId, publicKey: kp.publicKey, deviceFp: binding.fingerprint }) };
 }
 
-/** Step "finalize": accepts the admin's signed approval (verified with the aggregator key that came inside the invite). */
+/**
+ * Self-service join (no invite): creates the device key, sends ONLY the public key, the login tag and a short alias through `submit(request)` (the intake client), and keeps the
+ * device PENDING. The aggregator public key comes back in the same TLS-authenticated answer; every later approval is verified against it. Nothing is stored unless the server answered.
+ * The account is NOT chosen here: the administrator assigns it at approval (finalizeApproval then records it).
+ */
+export async function joinDevice({ deviceDir, sourceDir, label, now = new Date(), submit, rng = crypto.randomBytes }) {
+  if (loadDevice(deviceDir)) throw new Error("join: this device is already registered (remove the device folder only after the admin revoked it)");
+  const binding = bindingFor(sourceDir, label);
+  if (!binding) throw new Error(`join: ${label} is not bound to the logged-in account on this device (run observe, then bind)`);
+  const kp = generateKeyPair();
+  const request = { schema: JOIN_SCHEMA, label, publicKey: kp.publicKey, deviceFp: binding.fingerprint, nonce: Buffer.from(rng(16)).toString("hex") };
+  request.signature = sign(kp.privateKey, joinBody(request));
+  const res = await submit(request);
+  const b = res?.body;
+  if (!res?.ok || !/^dev_[0-9a-f]{16}$/.test(String(b?.deviceId)) || typeof b?.aggregatorPublicKey !== "string" || !/^[A-Za-z0-9+/=]{40,200}$/.test(b.aggregatorPublicKey)) {
+    return { joined: false, status: res?.status ?? 0, reason: String(b?.error ?? res?.error ?? "no usable answer").slice(0, 80) };
+  }
+  saveDevice(deviceDir, { deviceId: b.deviceId, accountId: null, label, publicKey: kp.publicKey, privateKey: kp.privateKey, aggregatorPublicKey: b.aggregatorPublicKey, deviceFp: binding.fingerprint, seq: 0, approved: false, self: true, enrolledAt: now.toISOString() });
+  return { joined: true, deviceId: b.deviceId, sas: sas({ deviceId: b.deviceId, publicKey: kp.publicKey, deviceFp: binding.fingerprint }) };
+}
+
+/** Step "finalize": accepts the admin's signed approval (verified with the aggregator key that came inside the invite, or - self-service - in the join answer). */
 export function finalizeApproval({ deviceDir, approval }) {
   const d = loadDevice(deviceDir);
   if (!d) throw new Error("finalize: this device has not been enrolled");
   const p = approval?.payload;
-  if (!p || p.schema !== "csm-fleet-approval/v1" || !verify(d.aggregatorPublicKey, p, approval.signature)) throw new Error("finalize: the approval is not signed by the aggregator from your invite");
-  if (p.deviceId !== d.deviceId || p.accountId !== d.accountId) throw new Error("finalize: the approval is for another device or account");
+  if (!p || p.schema !== "csm-fleet-approval/v1" || !verify(d.aggregatorPublicKey, p, approval.signature)) throw new Error("finalize: the approval is not signed by the aggregator this device registered with");
+  const selfAssign = d.self === true && d.accountId === null; // self-service: the administrator's signed choice of account is recorded now
+  if (p.deviceId !== d.deviceId || (selfAssign ? typeof p.accountId !== "string" || !ACCOUNT_ID_RE.test(p.accountId) : p.accountId !== d.accountId)) throw new Error("finalize: the approval is for another device or account");
   if (p.aggregatorKeyId !== keyId(d.aggregatorPublicKey)) throw new Error("finalize: aggregator key mismatch");
-  saveDevice(deviceDir, { ...d, approved: true, approvedAt: p.approvedAt });
-  return { deviceId: d.deviceId, accountId: d.accountId };
+  saveDevice(deviceDir, { ...d, accountId: p.accountId, approved: true, approvedAt: p.approvedAt });
+  return { deviceId: d.deviceId, accountId: p.accountId };
 }
 
 /**

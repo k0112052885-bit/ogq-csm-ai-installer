@@ -37,5 +37,6 @@ async function request(base, method, pathname, body, { fetchImpl = globalThis.fe
 }
 
 export const submitEnrollment = (base, enrollRequest, opts) => request(base, "POST", "/api/v1/enroll", enrollRequest, opts);
+export const submitJoin = (base, joinRequest, opts) => request(base, "POST", "/api/v1/join", joinRequest, opts);
 export const fetchApproval = (base, deviceId, opts) => request(base, "GET", `/api/v1/approval/${encodeURIComponent(deviceId)}`, undefined, opts);
 export const deliverReading = (base, envelope, opts) => request(base, "POST", "/api/v1/readings", envelope, opts);

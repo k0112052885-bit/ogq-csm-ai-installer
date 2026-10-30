@@ -7,8 +7,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deliverReading, fetchApproval, submitEnrollment, validateIngestUrl } from "./fleet-client.mjs";
-import { enrollDevice, finalizeApproval, loadDevice, makeReading } from "./fleet-device.mjs";
+import { deliverReading, fetchApproval, submitEnrollment, submitJoin, validateIngestUrl } from "./fleet-client.mjs";
+import { enrollDevice, finalizeApproval, joinDevice, loadDevice, makeReading } from "./fleet-device.mjs";
+import { validateAlias } from "./model.mjs";
 import { bindLabel, summarizeIdentity } from "./identity.mjs";
 import { observeIdentity } from "./identity-observe.mjs";
 import { MANIFEST_FILE, verifyManifest } from "./package-manifest.mjs";
@@ -17,6 +18,9 @@ import { REFERENCE_VERSION, sdkPreflight } from "./sdk-preflight.mjs";
 
 export const CONFIG_SCHEMA = "csm-employee-config/v1";
 export const LABELS = { poll: "com.ogq.csm.employee.poll", tick: "com.ogq.csm.employee.tick" };
+export const PROFILE_RE = /^[a-z0-9][a-z0-9-]{0,19}$/;
+/** Launchd labels. A profile (a second Claude login on the same Mac, kept in its own folder) gets its own pair, so two accounts never share an agent. */
+export const labelsFor = (profile = null) => (profile ? { poll: `${LABELS.poll}.${profile}`, tick: `${LABELS.tick}.${profile}` } : LABELS);
 export const POLL_MINUTES = 15;
 export const TICK_MINUTES = 30;
 export const SCRIPT = "scripts/employee-install.mjs";
@@ -26,6 +30,7 @@ export const CONSENTS = {
   observe: "Make ONE identity-only call to the Claude SDK to see which Claude account is logged in on this Mac? (No prompt is sent, no usage request, your e-mail is never stored: only a salted fingerprint.)",
   bind: "Is the Claude account that is logged in on THIS Mac right now the one you want counted for this subscription?",
   enroll: "Create a signing key that stays on this Mac and an enrollment request file for the admin (public key + login fingerprint only)?",
+  join: "Register this Mac with the dashboard at the address you were given? It sends ONLY a new public key, your salted login fingerprint and the short name you chose; it waits as PENDING until the owner approves it (nothing is trusted or approved automatically), and the owner decides which subscription it counts for.",
   configure: "Save the shared hand-off folder / ingest address / auto-accept setting you were given?",
   transport: "Send your enrollment request and, once approved, your signed usage readings (percentages and reset times only) to the dashboard address in your settings? Nothing else is sent, and it stays pending until the admin approves.",
   agents: "Install two background agents (launchd) that run when you log in or restart: one asks the Claude SDK for your plan usage (no prompt is sent) every 15 minutes, one writes signed usage reading files every 30 minutes?",
@@ -41,11 +46,14 @@ export class NeedsConsent extends Error {
   }
 }
 
-export const defaultRoot = () => path.join(os.homedir(), ".ogq-csm");
+export const defaultRoot = (profile = null) => path.join(os.homedir(), profile ? `.ogq-csm-${profile}` : ".ogq-csm");
 export function layout(root) {
   const j = (...p) => path.join(root, ...p);
   return { root, app: j("app"), data: j("data"), device: j("device"), outbox: j("outbox"), readings: j("outbox", "readings"), inbox: j("inbox"), logs: j("logs"), launchd: j("launchd"), private: j("private"), config: j("config.json"), health: j("health.json"), installState: j("install.json"), transport: j("transport.json") };
 }
+
+/** The launchd labels of THIS install (its profile, when it is a second account on the Mac). */
+export const labelsOf = (ctx) => labelsFor(readJson(layout(ctx.root).config)?.profile ?? null);
 
 /** ctx: { root, consent: {id: true}, now, platform, execPath, run(cmd, args, opts) -> {status, stdout, stderr}, uid, agentsDir } */
 export function makeCtx(o = {}) {
@@ -98,7 +106,21 @@ const copyTree = (from, to) => fs.cpSync(from, to, { recursive: true, force: tru
 // A code-only package (published repository) has no invite.json/package-config.json: the owner hands those over privately as a device kit (--kit-dir).
 const kitOf = (packageDir, kitDir) => (kitDir ? path.resolve(kitDir) : packageDir);
 
-export function preflight({ packageDir, kitDir = null, expectFingerprint = null, ctx }) {
+/** Validates the self-service (link) onboarding settings: the dashboard address, the short name, an optional profile (2nd account on one Mac) and its Claude config folder. */
+export function joinSettings(j) {
+  const server = validateIngestUrl(j?.server);
+  const label = String(j?.label ?? "");
+  const err = validateAlias(label);
+  if (err) throw new Error(`label: ${err}`);
+  const profile = j?.profile ? String(j.profile) : null;
+  if (profile && !PROFILE_RE.test(profile)) throw new Error("profile must be 1-20 characters: lowercase letters, digits, dashes");
+  const claudeConfigDir = j?.claudeConfigDir ? String(j.claudeConfigDir) : null;
+  if (claudeConfigDir && !path.isAbsolute(claudeConfigDir)) throw new Error("the Claude config folder must be an absolute path");
+  if (profile && !claudeConfigDir) throw new Error("a profile (second account on this Mac) needs its own --claude-config-dir so the two logins never share one");
+  return { server, label, profile, claudeConfigDir };
+}
+
+export function preflight({ packageDir, kitDir = null, join = null, expectFingerprint = null, ctx }) {
   const checks = [];
   const add = (id, ok, detail, level = "required") => checks.push({ id, ok, detail, level });
   const major = Number(process.versions.node.split(".")[0]);
@@ -108,13 +130,24 @@ export function preflight({ packageDir, kitDir = null, expectFingerprint = null,
   add("package-integrity", v.ok, v.ok ? `${Object.keys(v.manifest.files).length} files verified against MANIFEST.json` : v.problems.slice(0, 5).join("; "));
   if (expectFingerprint) add("fingerprint", v.fingerprint === String(expectFingerprint).toLowerCase(), v.fingerprint === String(expectFingerprint).toLowerCase() ? "matches the fingerprint the admin gave you" : "does NOT match the fingerprint the admin gave you: do not continue");
   else add("fingerprint", true, `package fingerprint ${v.fingerprint ?? "n/a"} - compare it with what the admin told you through another channel`, "info");
-  const kit = kitOf(packageDir, kitDir);
-  const invite = readJson(path.join(kit, "invite.json"));
-  const inviteOk = Boolean(invite) && invite.schema === "csm-fleet-invite/v1" && Date.parse(invite.expiresAt) > ctx.now.getTime();
-  add("invite", inviteOk, inviteOk ? `enrollment invite valid until ${invite.expiresAt}` : invite ? "the enrollment invite has expired: ask the admin for a new package" : "invite.json missing or unreadable (a code-only package needs the owner's private device kit: pass --kit-dir)");
-  const kitCfg = readJson(path.join(kit, "package-config.json"));
-  const kitOk = Boolean(kitCfg?.label) && Boolean(kitCfg?.accountId) && (!invite || kitCfg.accountId === invite.accountId);
-  add("device-config", kitOk, kitOk ? `device settings for ${kitCfg.label}` : "package-config.json missing, incomplete, or for a different account than the invite");
+  if (join) {
+    let js = null;
+    let why = "";
+    try {
+      js = joinSettings(join);
+    } catch (e) {
+      why = e.message;
+    }
+    add("join-settings", Boolean(js), js ? `self-service registration at ${js.server} as "${js.label}"${js.profile ? ` (profile ${js.profile})` : ""}: no invite is needed, the owner approves it in the dashboard` : why);
+  } else {
+    const kit = kitOf(packageDir, kitDir);
+    const invite = readJson(path.join(kit, "invite.json"));
+    const inviteOk = Boolean(invite) && invite.schema === "csm-fleet-invite/v1" && Date.parse(invite.expiresAt) > ctx.now.getTime();
+    add("invite", inviteOk, inviteOk ? `enrollment invite valid until ${invite.expiresAt}` : invite ? "the enrollment invite has expired: ask the admin for a new package" : "invite.json missing or unreadable (a code-only package needs the owner's private device kit: pass --kit-dir, or register by link: pass --server and --label)");
+    const kitCfg = readJson(path.join(kit, "package-config.json"));
+    const kitOk = Boolean(kitCfg?.label) && Boolean(kitCfg?.accountId) && (!invite || kitCfg.accountId === invite.accountId);
+    add("device-config", kitOk, kitOk ? `device settings for ${kitCfg.label}` : "package-config.json missing, incomplete, or for a different account than the invite");
+  }
   let anc = ctx.root;
   while (!fs.existsSync(anc) && path.dirname(anc) !== anc) anc = path.dirname(anc);
   let writable = true;
@@ -131,8 +164,9 @@ export function preflight({ packageDir, kitDir = null, expectFingerprint = null,
 
 // ------------------------------------------------------------------ install / sdk / login / enroll / finalize / configure
 
-export function installApp({ packageDir, kitDir = null, ctx }) {
+export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
   need(ctx, "install");
+  const js = join ? joinSettings(join) : null; // validated before anything is written
   const v = verifyManifest(packageDir);
   if (!v.ok) throw new Error(`package integrity check failed: ${v.problems.slice(0, 3).join("; ")}`);
   const L = layout(ctx.root);
@@ -147,15 +181,22 @@ export function installApp({ packageDir, kitDir = null, ctx }) {
     fs.chmodSync(dest, 0o644);
   }
   fs.copyFileSync(path.join(packageDir, MANIFEST_FILE), path.join(L.app, MANIFEST_FILE));
-  const kit = kitOf(packageDir, kitDir);
-  const cfg = readJson(path.join(kit, "package-config.json"));
-  if (!cfg?.label || !cfg?.accountId) throw new Error("package-config.json is missing label/accountId");
-  const invitePath = path.join(L.private, "invite.json");
-  if (!loadDevice(L.device) && !fs.existsSync(invitePath)) {
-    fs.copyFileSync(path.join(kit, "invite.json"), invitePath);
-    fs.chmodSync(invitePath, 0o600);
+  let cfg;
+  if (js) {
+    // self-service (link) onboarding: no invite and no account here; the owner assigns the account when approving
+    cfg = { label: js.label, accountId: null };
+    if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: js.label, accountId: null, selfJoin: true, profile: js.profile, claudeConfigDir: js.claudeConfigDir, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: null, autoFinalize: true, ingestUrl: js.server, transportEnabled: false });
+  } else {
+    const kit = kitOf(packageDir, kitDir);
+    cfg = readJson(path.join(kit, "package-config.json"));
+    if (!cfg?.label || !cfg?.accountId) throw new Error("package-config.json is missing label/accountId");
+    const invitePath = path.join(L.private, "invite.json");
+    if (!loadDevice(L.device) && !fs.existsSync(invitePath)) {
+      fs.copyFileSync(path.join(kit, "invite.json"), invitePath);
+      fs.chmodSync(invitePath, 0o600);
+    }
+    if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: cfg.label, accountId: cfg.accountId, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: cfg.dropDir ?? null, autoFinalize: false, ingestUrl: cfg.ingestUrl ? validateIngestUrl(cfg.ingestUrl) : null, transportEnabled: false });
   }
-  if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: cfg.label, accountId: cfg.accountId, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: cfg.dropDir ?? null, autoFinalize: false, ingestUrl: cfg.ingestUrl ? validateIngestUrl(cfg.ingestUrl) : null, transportEnabled: false });
   const pc = pollerPaths(L.data).config;
   if (!readJson(pc)) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false }));
   writePrivate(L.installState, { installedAt: readJson(L.installState)?.installedAt ?? ctx.now.toISOString(), updatedAt: ctx.now.toISOString(), version: v.manifest.version, fingerprint: v.fingerprint });
@@ -205,6 +246,29 @@ export function enroll({ ctx }) {
   fs.rmSync(path.join(L.private, "invite.json"), { force: true }); // the one-time code has done its job
   writePrivate(L.installState, { ...(readJson(L.installState) ?? {}), enrolledAt: ctx.now.toISOString(), verificationCode: sas, deviceId: invite.deviceId });
   return { state: "PENDING_ADMIN_APPROVAL", requestFile, verificationCode: sas, deviceId: invite.deviceId };
+}
+
+/**
+ * Self-service registration (link onboarding): the join step of a package installed with --server/--label. Sends the public key + login tag + alias to the dashboard, which can only queue
+ * it as PENDING while the owner has opened registration. From then on the background report agent polls for the owner's signed approval and accepts it (auto-finalize), then collects.
+ */
+export async function joinRemote({ ctx }) {
+  need(ctx, "join");
+  const L = layout(ctx.root);
+  const cfg = readJson(L.config);
+  if (!cfg) throw new Error("install the package first");
+  if (cfg.selfJoin !== true || !cfg.ingestUrl) throw new Error("this install was not set up for link registration (use enroll with the owner's device kit)");
+  if (loadDevice(L.device)) throw new Error("this device is already registered");
+  const base = validateIngestUrl(cfg.ingestUrl);
+  const r = await joinDevice({ deviceDir: L.device, sourceDir: L.data, label: cfg.label, now: ctx.now, submit: (req) => submitJoin(base, req, { fetchImpl: ctx.fetch }) });
+  if (!r.joined) {
+    if (r.status === 403) throw new Error("the owner has not opened registration (or the window ended): ask them to open it in the dashboard, then run join again");
+    if (r.status === 429) throw new Error("registration is busy or full right now: try again later");
+    throw new Error(`could not register (${r.reason}${r.status ? `, status ${r.status}` : ""}): nothing was saved, run join again`);
+  }
+  writePrivate(L.config, { ...cfg, transportEnabled: true, autoFinalize: true });
+  writePrivate(L.installState, { ...(readJson(L.installState) ?? {}), enrolledAt: ctx.now.toISOString(), verificationCode: r.sas, deviceId: r.deviceId });
+  return { state: "PENDING_ADMIN_APPROVAL", deviceId: r.deviceId, verificationCode: r.sas, server: base };
 }
 
 function findApproval(ctx, explicit) {
@@ -406,7 +470,7 @@ ${args.map((a) => `    <string>${esc(a)}</string>`).join("\n")}
   <key>ProcessType</key><string>Background</string>
   <key>ThrottleInterval</key><integer>60</integer>
   <key>EnvironmentVariables</key>
-  <dict><key>PATH</key><string>${esc(env.PATH)}</string><key>HOME</key><string>${esc(env.HOME)}</string></dict>
+  <dict><key>PATH</key><string>${esc(env.PATH)}</string><key>HOME</key><string>${esc(env.HOME)}</string>${env.CLAUDE_CONFIG_DIR ? `<key>CLAUDE_CONFIG_DIR</key><string>${esc(env.CLAUDE_CONFIG_DIR)}</string>` : ""}</dict>
   <key>StandardOutPath</key><string>${esc(logFile)}</string>
   <key>StandardErrorPath</key><string>${esc(logFile)}</string>
 </dict>
@@ -418,9 +482,11 @@ export function agentFiles(ctx) {
   const L = layout(ctx.root);
   const home = ctx.home;
   const env = { HOME: home, PATH: [path.dirname(ctx.execPath), path.join(home, ".local", "bin"), path.join(home, ".claude", "local"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":") };
+  const labels = labelsOf(ctx);
+  const cfgDir = readJson(L.config)?.claudeConfigDir ?? null; // a second account on this Mac: its poll agent reads ITS Claude login, not the default one
   return {
-    [`${LABELS.poll}.plist`]: plistText({ label: LABELS.poll, seconds: POLL_MINUTES * 60, logFile: path.join(L.logs, "poll.log"), env, args: [ctx.execPath, path.join(L.app, "scripts", "employee-poll.mjs"), "--config", pollerPaths(L.data).config] }),
-    [`${LABELS.tick}.plist`]: plistText({ label: LABELS.tick, seconds: TICK_MINUTES * 60, logFile: path.join(L.logs, "tick.log"), env, args: [ctx.execPath, path.join(L.app, SCRIPT), "tick", "--root", L.root] }),
+    [`${labels.poll}.plist`]: plistText({ label: labels.poll, seconds: POLL_MINUTES * 60, logFile: path.join(L.logs, "poll.log"), env: cfgDir ? { ...env, CLAUDE_CONFIG_DIR: cfgDir } : env, args: [ctx.execPath, path.join(L.app, "scripts", "employee-poll.mjs"), "--config", pollerPaths(L.data).config] }),
+    [`${labels.tick}.plist`]: plistText({ label: labels.tick, seconds: TICK_MINUTES * 60, logFile: path.join(L.logs, "tick.log"), env, args: [ctx.execPath, path.join(L.app, SCRIPT), "tick", "--root", L.root] }),
   };
 }
 
@@ -451,7 +517,7 @@ export async function installAgents({ ctx }) {
 
 export async function agentStatus(ctx) {
   const out = {};
-  for (const label of Object.values(LABELS)) {
+  for (const label of Object.values(labelsOf(ctx))) {
     const plist = fs.existsSync(path.join(ctx.agentsDir, `${label}.plist`));
     let loaded = false;
     if (plist && ctx.platform === "darwin") loaded = (await ctx.run("launchctl", ["print", `gui/${ctx.uid}/${label}`])).status === 0;
@@ -500,12 +566,14 @@ export async function status({ ctx }) {
   base.transport = { ingestUrl: cfg.ingestUrl ?? null, enabled: cfg.transportEnabled === true, requestSent: tx.requestSent === true, delivered: tx.delivered.length, rejected: tx.rejected.length, queued, lastError: health?.remote?.error ?? null };
   if (cfg.ingestUrl && cfg.transportEnabled !== true && ["PENDING_ADMIN_APPROVAL", "APPROVED_NO_AGENTS", "RUNNING"].includes(phase)) base.transportNext = { command: `node ${SCRIPT} enable-transport --consent-transport`, consent: "transport", question: CONSENTS.transport };
   if (cfg.transportEnabled === true && queued > 0 && phase === "RUNNING") warn(base, `${queued} reading(s) are waiting to be delivered${base.transport.lastError ? ` (${base.transport.lastError})` : ""}`);
-  if (phase === "PENDING_ADMIN_APPROVAL") base.pending = { what: "the admin must approve this device", verificationCode: readJson(L.installState)?.verificationCode ?? null, requestFile: path.join(L.outbox, "enroll-request.json"), approvalGoesTo: path.join(L.inbox, "approval.json") };
-  return { ...base, next: nextStep(phase) };
+  if (phase === "PENDING_ADMIN_APPROVAL") base.pending = cfg.selfJoin === true ? { what: "the owner must approve this device in the dashboard (Devices page) and choose its account", verificationCode: readJson(L.installState)?.verificationCode ?? null, requestFile: null, approvalGoesTo: null } : { what: "the admin must approve this device", verificationCode: readJson(L.installState)?.verificationCode ?? null, requestFile: path.join(L.outbox, "enroll-request.json"), approvalGoesTo: path.join(L.inbox, "approval.json") };
+  if (cfg.selfJoin === true) base.profile = cfg.profile ?? null;
+  return { ...base, next: nextStep(phase, cfg) };
 }
 const warn = (o, m) => o.warnings.push(m);
 
-export function nextStep(phase) {
+export function nextStep(phase, cfg = null) {
+  const self = cfg?.selfJoin === true;
   const e = (command, consent = null) => ({ command: `node ${SCRIPT} ${command}`, consent, question: consent ? CONSENTS[consent] : null });
   switch (phase) {
     case "NOT_INSTALLED":
@@ -519,8 +587,9 @@ export function nextStep(phase) {
     case "LOGIN_NOT_IDENTIFIABLE":
       return { command: null, consent: null, question: null, note: "this Claude login exposes no e-mail the SDK can fingerprint (for example a non-first-party provider): it cannot be linked; stop and tell the admin" };
     case "NEEDS_ENROLL":
-      return e("enroll --consent-enroll", "enroll");
+      return self ? e("join --consent-join", "join") : e("enroll --consent-enroll", "enroll");
     case "PENDING_ADMIN_APPROVAL":
+      if (self) return { command: `node ${SCRIPT} finalize`, consent: null, question: null, note: "WAITING FOR THE OWNER. Read the verification code to the owner (they type it in the dashboard and choose the account). Install the background agents now (install-agents): they pick up the approval by themselves and start collecting. Or run this command again after the owner approved." };
       return { command: `node ${SCRIPT} finalize`, consent: null, question: null, note: "WAITING FOR THE ADMIN. Hand enroll-request.json and the verification code to the admin; when approval.json comes back, put it in the inbox folder (or pass --approval FILE) and run this command again." };
     case "APPROVED_NO_AGENTS":
       return e("install-agents --consent-agents", "agents");
@@ -562,7 +631,7 @@ export async function uninstall({ ctx, purge = false }) {
   need(ctx, "uninstall");
   const L = layout(ctx.root);
   const removed = [];
-  for (const label of Object.values(LABELS)) {
+  for (const label of Object.values(labelsOf(ctx))) {
     const target = path.join(ctx.agentsDir, `${label}.plist`);
     if (fs.existsSync(target)) {
       if (ctx.platform === "darwin") await ctx.run("launchctl", ["bootout", `gui/${ctx.uid}`, target]);

@@ -1,23 +1,23 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-30T04:55:47.962Z",
+  "builtAt": "2026-10-30T07:17:37.387Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "1bd9a8e4f765e0878aea0263c741f31828e795b3d1ec06d74c45a2ef6821c50b",
-      "size": 4787
+      "sha256": "91dbafed9d4aff10b3c91854cf011f553a106845df9ed1e0e3a23a5d3d47bf2a",
+      "size": 6747
     },
     "package.json": {
       "sha256": "f6e7cfcbb30bb17a01f3b73df9c350c02becd7a85db8cfe15050348cb1b057e5",
       "size": 133
     },
     "scripts/employee-install.mjs": {
-      "sha256": "3c72148666a658d25de190723f75eefda4ea5592aabf333c40782e32407eaa6e",
-      "size": 6820
+      "sha256": "75eb121b230450526fe06b7049576d666e89c772f9ef0993cdcc737fcc498657",
+      "size": 8763
     },
     "scripts/employee-poll.mjs": {
       "sha256": "f8992dd4d5caa6327a2207a5eda3b8139490e76019e8d3b1392233cc672de608",
@@ -36,24 +36,24 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "f573fdae6c50537b381dc722afa287e8f35fd9267bc87983c75624652a932cbe",
-      "size": 36361
+      "sha256": "c13599f9f1bdbd64878181f7fdbd2bbd32332c45e255d6cf1f79a6b003fac417",
+      "size": 42394
     },
     "src/fleet-client.mjs": {
-      "sha256": "1769259338fbcb3af22bd8637e1f98829d8dab12f6cb28108e1fea7534f97a09",
-      "size": 3039
+      "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",
+      "size": 3152
     },
     "src/fleet-crypto.mjs": {
       "sha256": "c0d052251a13aeb3e27ae9e85970443df84739e0a8ba1aab3520407bd3a713a5",
       "size": 2691
     },
     "src/fleet-device.mjs": {
-      "sha256": "21195f5faafe0c3abd97dc12cea252dcc92bdf8c2d70cd8271d40f4b85c0d8f5",
-      "size": 6135
+      "sha256": "57324ff2757768164bfc70b15e636163d0b44696075e1f442d0cb6603b3e81ba",
+      "size": 8459
     },
     "src/fleet-protocol.mjs": {
-      "sha256": "e582b090f5c2550c7b182505fe371c58fa2fafacefd5e161d7df63fd69434908",
-      "size": 941
+      "sha256": "4857e5f3aa2edf7f49aa8fdf54ede2ee30cdf7d89e9447aa05c365e1500623d8",
+      "size": 1420
     },
     "src/identity-observe.mjs": {
       "sha256": "86188a9cbd69e3d0665cb2081db4ecf2ec6be97699bee2b41675f1b2b3ac72d7",
