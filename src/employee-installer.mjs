@@ -174,6 +174,14 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
   const L = layout(ctx.root);
   if (path.resolve(packageDir) === L.app) throw new Error("run install from the package folder you were given, not from the installed copy");
   const before = readJson(path.join(L.app, MANIFEST_FILE));
+  // installing again must never silently keep OLD settings: a corrected --server / --label replaces them while nothing is registered yet, and is refused once the device is registered
+  const existing = js ? readJson(L.config) : null;
+  let settingsUpdated = false;
+  if (js && existing) {
+    if (existing.selfJoin !== true) throw new Error(`this folder (${L.root}) was installed with an owner device kit: use another --profile / --root, or uninstall it with --purge first`);
+    settingsUpdated = existing.label !== js.label || (existing.profile ?? null) !== js.profile || (existing.claudeConfigDir ?? null) !== js.claudeConfigDir || existing.ingestUrl !== js.server;
+    if (settingsUpdated && loadDevice(L.device)) throw new Error(`this folder is already registered as "${existing.label}" at ${existing.ingestUrl}: uninstall it with --purge first to use a different name or address`);
+  }
   mkdirs(L.root, L.data, L.outbox, L.readings, L.inbox, L.logs, L.launchd, L.private, L.app);
   for (const rel of Object.keys(v.manifest.files)) {
     if (rel === "invite.json") continue; // the one-time invite goes to the private folder only
@@ -187,7 +195,9 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
   if (js) {
     // self-service (link) onboarding: no invite and no account here; the owner assigns the account when approving
     cfg = { label: js.label, accountId: null };
-    if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: js.label, accountId: null, selfJoin: true, profile: js.profile, claudeConfigDir: js.claudeConfigDir, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: null, autoFinalize: true, ingestUrl: js.server, transportEnabled: false });
+    const fresh = { schema: CONFIG_SCHEMA, label: js.label, accountId: null, selfJoin: true, profile: js.profile, claudeConfigDir: js.claudeConfigDir, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: null, autoFinalize: true, ingestUrl: js.server, transportEnabled: false };
+    if (!existing) writePrivate(L.config, fresh);
+    else if (settingsUpdated) writePrivate(L.config, { ...existing, label: js.label, profile: js.profile, claudeConfigDir: js.claudeConfigDir, ingestUrl: js.server, transportEnabled: false, packageVersion: v.manifest.version });
   } else {
     const kit = kitOf(packageDir, kitDir);
     cfg = readJson(path.join(kit, "package-config.json"));
@@ -200,9 +210,9 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
     if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: cfg.label, accountId: cfg.accountId, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: cfg.dropDir ?? null, autoFinalize: false, ingestUrl: cfg.ingestUrl ? validateIngestUrl(cfg.ingestUrl) : null, transportEnabled: false });
   }
   const pc = pollerPaths(L.data).config;
-  if (!readJson(pc)) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false }));
+  if (!readJson(pc) || settingsUpdated) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false })); // (a renamed label starts with the poll off and needs observe + bind again)
   writePrivate(L.installState, { installedAt: readJson(L.installState)?.installedAt ?? ctx.now.toISOString(), updatedAt: ctx.now.toISOString(), version: v.manifest.version, fingerprint: v.fingerprint });
-  return { installed: true, alreadyInstalled: Boolean(before), version: v.manifest.version, ...(js ? {} : { fingerprint: v.fingerprint }), appDir: L.app, entry: path.join(L.app, SCRIPT) };
+  return { installed: true, alreadyInstalled: Boolean(before), ...(settingsUpdated ? { settingsUpdated: true } : {}), version: v.manifest.version, ...(js ? {} : { fingerprint: v.fingerprint }), appDir: L.app, entry: path.join(L.app, SCRIPT) };
 }
 
 export async function installSdk({ ctx, from = null }) {

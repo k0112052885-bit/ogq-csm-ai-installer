@@ -1,7 +1,7 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-30T08:06:24.663Z",
+  "builtAt": "2026-10-30T09:22:47.541Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
@@ -48,8 +48,8 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "92b0c2c107ae5833322d76210f3655c2e979535067ae1c8a61033f96b00d2b71",
-      "size": 43156
+      "sha256": "1502b4247f8b93115fab7a030eeed8d2f2da96f1d90e95eff03a3e59abb66e8c",
+      "size": 44444
     },
     "src/fleet-client.mjs": {
       "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",
