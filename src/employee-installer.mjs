@@ -129,6 +129,7 @@ export function preflight({ packageDir, kitDir = null, join = null, expectFinger
   const v = verifyManifest(packageDir);
   add("package-integrity", v.ok, v.ok ? `${Object.keys(v.manifest.files).length} files verified against MANIFEST.json` : v.problems.slice(0, 5).join("; "));
   if (expectFingerprint) add("fingerprint", v.fingerprint === String(expectFingerprint).toLowerCase(), v.fingerprint === String(expectFingerprint).toLowerCase() ? "matches the fingerprint the admin gave you" : "does NOT match the fingerprint the admin gave you: do not continue");
+  else if (join) add("code-pin", true, "link registration: there is NO fingerprint to compare or ask for; the code is pinned by the commit the owner named (git rev-parse HEAD) and every file is verified against MANIFEST.json", "info");
   else add("fingerprint", true, `package fingerprint ${v.fingerprint ?? "n/a"} - compare it with what the admin told you through another channel`, "info");
   if (join) {
     let js = null;
@@ -159,7 +160,8 @@ export function preflight({ packageDir, kitDir = null, join = null, expectFinger
   add("home-writable", writable, writable ? `can create ${ctx.root}` : `cannot write under ${anc}`);
   const sdk = sdkAt(layout(ctx.root).app);
   add("sdk", sdk.installed, sdk.installed ? `SDK ${sdk.version} present` : "SDK not installed yet (a later step installs the pinned version)", "later");
-  return { ok: checks.filter((c) => c.level === "required").every((c) => c.ok), checks, fingerprint: v.fingerprint, version: v.manifest?.version ?? null };
+  // link registration shows no fingerprint at all (nothing for an AI to mistake for something to request); it stays in kit mode and whenever the owner explicitly passed one to check
+  return { ok: checks.filter((c) => c.level === "required").every((c) => c.ok), checks, ...(join && !expectFingerprint ? {} : { fingerprint: v.fingerprint }), version: v.manifest?.version ?? null };
 }
 
 // ------------------------------------------------------------------ install / sdk / login / enroll / finalize / configure
@@ -200,7 +202,7 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
   const pc = pollerPaths(L.data).config;
   if (!readJson(pc)) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false }));
   writePrivate(L.installState, { installedAt: readJson(L.installState)?.installedAt ?? ctx.now.toISOString(), updatedAt: ctx.now.toISOString(), version: v.manifest.version, fingerprint: v.fingerprint });
-  return { installed: true, alreadyInstalled: Boolean(before), version: v.manifest.version, fingerprint: v.fingerprint, appDir: L.app, entry: path.join(L.app, SCRIPT) };
+  return { installed: true, alreadyInstalled: Boolean(before), version: v.manifest.version, ...(js ? {} : { fingerprint: v.fingerprint }), appDir: L.app, entry: path.join(L.app, SCRIPT) };
 }
 
 export async function installSdk({ ctx, from = null }) {
@@ -626,7 +628,7 @@ export function update({ ctx, packageDir }) {
   fs.copyFileSync(path.join(packageDir, MANIFEST_FILE), path.join(L.app, MANIFEST_FILE));
   writePrivate(L.installState, { ...(readJson(L.installState) ?? {}), updatedAt: ctx.now.toISOString(), version: v.manifest.version, fingerprint: v.fingerprint });
   writePrivate(L.config, { ...cfgOld, packageVersion: v.manifest.version });
-  return { updated: true, from: cur.version, to: v.manifest.version, fingerprint: v.fingerprint };
+  return { updated: true, from: cur.version, to: v.manifest.version, ...(cfgOld?.selfJoin === true ? {} : { fingerprint: v.fingerprint }) };
 }
 
 export async function uninstall({ ctx, purge = false }) {

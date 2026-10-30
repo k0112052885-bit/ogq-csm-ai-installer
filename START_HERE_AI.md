@@ -13,7 +13,7 @@ Read all of this first.
 
 ## Quick path: link registration (default - no kit, no invitation, no fingerprint to type)
 **OGQ owner-provided intake endpoint:** https://ethan-macbookpro.tail40be41.ts.net:10000 (HTTPS intake only, intentionally public for device join). Use this exact address for the server option; do not request another address from the employee. It is not the admin login UI. The admin opens the join window and approves the device.
-The human gives you ONE thing besides this repository: the **dashboard address** (an https address such as `https://dashboard.example.com`) and a **short name** for this Mac's subscription (letters, digits, space . _ -; never an e-mail). Nothing secret is needed: registration only creates a PENDING request that the owner must approve in the dashboard.
+There is NO fingerprint in this path: do not ask the human for one (`preflight` prints none and checks every file against MANIFEST.json by itself). The human gives you ONE thing besides this repository: the **dashboard address** (an https address such as `https://dashboard.example.com`) and a **short name** for this Mac's subscription (letters, digits, space . _ -; never an e-mail). Nothing secret is needed: registration only creates a PENDING request that the owner must approve in the dashboard.
 1. `node scripts/employee-install.mjs install --server <dashboard address> --label <short name> --consent-install` (add `--profile <name> --claude-config-dir <absolute folder>` ONLY for a second Claude account on the same Mac, each profile with its own config folder and login; the default install needs neither).
 2. From now on run every command from the INSTALLED copy, not from this clone: `node ~/.ogq-csm/app/scripts/employee-install.mjs <command>` (a profile install lives in `~/.ogq-csm-<profile>/app/scripts/`). The installed copy always uses its own folder, so two accounts on one Mac never mix. `status` prints `next`; follow it: `sdk --consent-sdk`, `observe --consent-observe`, `bind --consent-bind`. Before `bind`, ask the human whether the account logged in for THIS install (for a profile: the one logged in under its own `--claude-config-dir`) is the one meant.
 3. **Register**: `join --consent-join`. It prints a **verification code**. If it says registration is closed, ask the owner to open it (Devices page, "link registration window") and run `join` again.
@@ -47,7 +47,7 @@ Run from this clone (`node scripts/employee-install.mjs ...`; Node 20 or newer).
 
 ## Later
 - Health: `node ~/.ogq-csm/app/scripts/employee-install.mjs status`.
-- Update: pull the owner-named tag here, re-run preflight with the NEW fingerprint, then `... update --package-dir <this clone> --consent-update`.
+- Update: pull the owner-named commit or tag here, re-run `preflight --server <dashboard address> --label <short name>` (link mode shows no fingerprint and needs none; with a device kit use `--expect-fingerprint`), then `... update --package-dir <this clone> --consent-update`.
 - Remove: `... uninstall --consent-uninstall` (`--purge` also deletes the device key; the device would then need a NEW kit).
 - One Mac keeps one Claude login linked at a time. Do not install a second account on the same Mac unless the owner says how.
 
