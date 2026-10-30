@@ -1,31 +1,35 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-30T09:22:47.541Z",
+  "builtAt": "2026-10-30T09:34:31.409Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "4f5c95b7a4ecf7e8e5bd60cffcc05be26394568c9f0abb2a753dfc01dae5b85d",
-      "size": 8791
+      "sha256": "b6baf5f3f7570390c966c126e5cd431e6c6dd0ac9b4ecc944df56526adcb7b73",
+      "size": 9079
     },
     "README.md": {
-      "sha256": "3f3a7b0e29cb7c0b1c6f10593bd8eca9b5153f24f888f092db2161b526e95ada",
-      "size": 489
+      "sha256": "e04a48332758700a99889908d67582318130c6a08ca749df7cab70044910fddd",
+      "size": 515
     },
     "START_HERE_AI.md": {
-      "sha256": "4f5c95b7a4ecf7e8e5bd60cffcc05be26394568c9f0abb2a753dfc01dae5b85d",
-      "size": 8791
+      "sha256": "b6baf5f3f7570390c966c126e5cd431e6c6dd0ac9b4ecc944df56526adcb7b73",
+      "size": 9079
+    },
+    "join.json": {
+      "sha256": "db76e8c633ecb7eb9537a1ef0e86d424a226c75b26d9077e41edf48fee5cf258",
+      "size": 103
     },
     "package.json": {
       "sha256": "f6e7cfcbb30bb17a01f3b73df9c350c02becd7a85db8cfe15050348cb1b057e5",
       "size": 133
     },
     "scripts/employee-install.mjs": {
-      "sha256": "75eb121b230450526fe06b7049576d666e89c772f9ef0993cdcc737fcc498657",
-      "size": 8763
+      "sha256": "3c50f609707f6a93cbcaf27fed3c8b5cf0f4416a6313ccb230991f831fb690ac",
+      "size": 9297
     },
     "scripts/employee-poll.mjs": {
       "sha256": "f8992dd4d5caa6327a2207a5eda3b8139490e76019e8d3b1392233cc672de608",
@@ -48,8 +52,8 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "1502b4247f8b93115fab7a030eeed8d2f2da96f1d90e95eff03a3e59abb66e8c",
-      "size": 44444
+      "sha256": "82528aaab4dff9291c8fd095ce2c4366deccdc5760e713b5c4b7cb1f8a036921",
+      "size": 46592
     },
     "src/fleet-client.mjs": {
       "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",

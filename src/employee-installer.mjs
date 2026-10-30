@@ -4,6 +4,7 @@
 // the usage reading fresh and produce signed reading files. What it never does: contact the admin or any server, send Slack messages, read or write Claude settings
 // or credentials, hold any admin secret or signing key, or install anything without a named consent. Enrollment is NEVER automatic: the device stays
 // PENDING_ADMIN_APPROVAL until the admin approves it and the signed approval file comes back (by hand, or through an optional shared drop folder).
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -120,6 +121,31 @@ export function joinSettings(j) {
   return { server, label, profile, claudeConfigDir };
 }
 
+/** `join.json` of a code-only package built with a built-in intake address (a PUBLIC origin, not a secret), or null. */
+export function readJoinDefaults(packageDir) {
+  const j = readJson(path.join(packageDir, "join.json"));
+  if (!j || j.schema !== "csm-join-defaults/v1" || typeof j.server !== "string") return null;
+  try {
+    return { server: validateIngestUrl(j.server) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The link-registration settings for this run, so an employee's AI needs NOTHING but the repository link when the package has a built-in address: explicit --server / --label win; otherwise
+ * the built-in address; the alias is the given one, else the one already installed in this folder (so a re-run with no flags is the SAME install, never a refused "different alias"),
+ * else a neutral generated one (`ogq-` + 6 hex: no name, no e-mail). Owner device-kit mode is untouched: with --kit-dir and no --server this returns null.
+ */
+export function resolveJoin({ server = null, label = null, profile = null, claudeConfigDir = null, packageDir, kitDir = null, ctx, randomHex = () => crypto.randomBytes(3).toString("hex") }) {
+  if (kitDir && !server) return null;
+  const address = server ?? (kitDir ? null : readJoinDefaults(packageDir)?.server ?? null);
+  if (!address) return null;
+  const installed = readJson(layout(ctx.root).config);
+  const alias = label ?? (installed?.selfJoin === true && typeof installed.label === "string" ? installed.label : `ogq-${randomHex()}`);
+  return { server: address, label: alias, profile: profile ?? undefined, claudeConfigDir: claudeConfigDir ?? undefined };
+}
+
 export function preflight({ packageDir, kitDir = null, join = null, expectFingerprint = null, ctx }) {
   const checks = [];
   const add = (id, ok, detail, level = "required") => checks.push({ id, ok, detail, level });
@@ -174,13 +200,19 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
   const L = layout(ctx.root);
   if (path.resolve(packageDir) === L.app) throw new Error("run install from the package folder you were given, not from the installed copy");
   const before = readJson(path.join(L.app, MANIFEST_FILE));
-  // installing again must never silently keep OLD settings: a corrected --server / --label replaces them while nothing is registered yet, and is refused once the device is registered
+  // An existing link install keeps its settings. A different --server / --label / --profile / --claude-config-dir is REFUSED here, before anything is copied or written (never silently kept,
+  // never overwritten: the registered device, login link, collected data and settings stay exactly as they are); identical settings are an idempotent re-install.
   const existing = js ? readJson(L.config) : null;
-  let settingsUpdated = false;
+  if (js && !existing && fs.existsSync(L.config)) throw new Error(`install refused, nothing was changed: ${L.config} exists but cannot be read; it is not overwritten (repair or move it yourself)`);
   if (js && existing) {
-    if (existing.selfJoin !== true) throw new Error(`this folder (${L.root}) was installed with an owner device kit: use another --profile / --root, or uninstall it with --purge first`);
-    settingsUpdated = existing.label !== js.label || (existing.profile ?? null) !== js.profile || (existing.claudeConfigDir ?? null) !== js.claudeConfigDir || existing.ingestUrl !== js.server;
-    if (settingsUpdated && loadDevice(L.device)) throw new Error(`this folder is already registered as "${existing.label}" at ${existing.ingestUrl}: uninstall it with --purge first to use a different name or address`);
+    if (existing.selfJoin !== true) throw new Error(`install refused, nothing was changed: ${L.root} was installed with an owner device kit; use another --profile / --root`);
+    const same = (a, b) => (a === null || a === undefined ? null : path.resolve(a)) === (b === null || b === undefined ? null : path.resolve(b));
+    const diff = [];
+    if (existing.ingestUrl !== js.server) diff.push(`--server (installed ${existing.ingestUrl ?? "none"}, requested ${js.server})`);
+    if (existing.label !== js.label) diff.push(`--label (installed "${existing.label}", requested "${js.label}")`);
+    if ((existing.profile ?? null) !== js.profile) diff.push(`--profile (installed ${existing.profile ?? "none"}, requested ${js.profile ?? "none"})`);
+    if (!same(existing.claudeConfigDir, js.claudeConfigDir)) diff.push(`--claude-config-dir (installed ${existing.claudeConfigDir ?? "none"}, requested ${js.claudeConfigDir ?? "none"})`);
+    if (diff.length) throw new Error(`install refused, nothing was changed: this folder already has different link settings: ${diff.join("; ")}. Use the installed values, or remove this install first.`);
   }
   mkdirs(L.root, L.data, L.outbox, L.readings, L.inbox, L.logs, L.launchd, L.private, L.app);
   for (const rel of Object.keys(v.manifest.files)) {
@@ -197,7 +229,6 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
     cfg = { label: js.label, accountId: null };
     const fresh = { schema: CONFIG_SCHEMA, label: js.label, accountId: null, selfJoin: true, profile: js.profile, claudeConfigDir: js.claudeConfigDir, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: null, autoFinalize: true, ingestUrl: js.server, transportEnabled: false };
     if (!existing) writePrivate(L.config, fresh);
-    else if (settingsUpdated) writePrivate(L.config, { ...existing, label: js.label, profile: js.profile, claudeConfigDir: js.claudeConfigDir, ingestUrl: js.server, transportEnabled: false, packageVersion: v.manifest.version });
   } else {
     const kit = kitOf(packageDir, kitDir);
     cfg = readJson(path.join(kit, "package-config.json"));
@@ -210,9 +241,9 @@ export function installApp({ packageDir, kitDir = null, join = null, ctx }) {
     if (!readJson(L.config)) writePrivate(L.config, { schema: CONFIG_SCHEMA, label: cfg.label, accountId: cfg.accountId, packageVersion: v.manifest.version, installedAt: ctx.now.toISOString(), dropDir: cfg.dropDir ?? null, autoFinalize: false, ingestUrl: cfg.ingestUrl ? validateIngestUrl(cfg.ingestUrl) : null, transportEnabled: false });
   }
   const pc = pollerPaths(L.data).config;
-  if (!readJson(pc) || settingsUpdated) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false })); // (a renamed label starts with the poll off and needs observe + bind again)
+  if (!readJson(pc)) writePrivate(pc, defaultConfig({ account: cfg.label, dir: L.data, intervalMinutes: POLL_MINUTES, enabled: false }));
   writePrivate(L.installState, { installedAt: readJson(L.installState)?.installedAt ?? ctx.now.toISOString(), updatedAt: ctx.now.toISOString(), version: v.manifest.version, fingerprint: v.fingerprint });
-  return { installed: true, alreadyInstalled: Boolean(before), ...(settingsUpdated ? { settingsUpdated: true } : {}), version: v.manifest.version, ...(js ? {} : { fingerprint: v.fingerprint }), appDir: L.app, entry: path.join(L.app, SCRIPT) };
+  return { installed: true, alreadyInstalled: Boolean(before), version: v.manifest.version, ...(js ? {} : { fingerprint: v.fingerprint }), appDir: L.app, entry: path.join(L.app, SCRIPT) };
 }
 
 export async function installSdk({ ctx, from = null }) {

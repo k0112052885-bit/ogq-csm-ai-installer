@@ -2,6 +2,7 @@
 // Single entrypoint of the employee package. Every command prints ONE JSON line { ok, step, ..., next } so an AI agent can drive it; step-by-step instructions
 // are in AGENT_INSTALL.md. Nothing is changed without its named consent flag, nothing is sent anywhere, and enrollment always waits for the admin.
 //   node scripts/employee-install.mjs preflight [--expect-fingerprint <12 hex from the admin>] [--kit-dir <private device kit>]   read-only checks (code-only package: --kit-dir also on install)
+//   ONE LINK: when the repository carries join.json (built with package-code-only.mjs --server), `install --consent-install` needs no other argument.
 //   LINK REGISTRATION (no kit, no invite): install --server https://dashboard.example.com --label <short name> [--profile b --claude-config-dir /abs/.claude-b] --consent-install
 //                                          ... then sdk, observe, bind as usual, then:  join --consent-join   (PENDING until the owner approves in the dashboard; agents auto-finalize)
 //   node scripts/employee-install.mjs status                                                     phase, pending items, health, next step (read-only)
@@ -20,7 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import fs from "node:fs";
-import { bindLogin, configure, defaultRoot, enableTransport, enroll, finalize, finalizeRemote, installAgents, installApp, installSdk, joinRemote, layout, makeCtx, NeedsConsent, observeLogin, PROFILE_RE, preflight, status, syncRemote, tick, uninstall, update } from "../src/employee-installer.mjs";
+import { bindLogin, configure, defaultRoot, enableTransport, enroll, finalize, finalizeRemote, installAgents, installApp, installSdk, joinRemote, layout, makeCtx, NeedsConsent, observeLogin, PROFILE_RE, preflight, resolveJoin, status, syncRemote, tick, uninstall, update } from "../src/employee-installer.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const out = (o) => console.log(JSON.stringify(o));
@@ -40,7 +41,8 @@ try {
   const withNext = async (step, data) => ({ ok: true, step, ...data, next: (await status({ ctx })).next });
   const kitDir = values["kit-dir"] ?? null; // private per-device kit (invite.json + package-config.json) when the code came from a code-only package
   // link (self-service) registration: --server + --label, no kit and no invite; a second account on the same Mac adds --profile and its own --claude-config-dir
-  const join = values.server ? { server: values.server, label: values.label, profile: values.profile, claudeConfigDir: values["claude-config-dir"] } : null;
+  // When the repository has a built-in address (join.json) nothing at all is needed from the human: the address comes from there and the alias is the installed one or a neutral generated one.
+  const join = resolveJoin({ server: values.server ?? null, label: values.label ?? null, profile: values.profile ?? null, claudeConfigDir: values["claude-config-dir"] ?? null, packageDir, kitDir, ctx, ...(cmd === "preflight" ? { randomHex: () => "xxxxxx" } : {}) }); // (preflight shows a placeholder alias: only install creates one)
   // an install bound to its own Claude config folder (second account) reads THAT login in every later step
   try {
     const saved = JSON.parse(fs.readFileSync(layout(ctx.root).config, "utf8"));
