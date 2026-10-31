@@ -6,6 +6,8 @@
 //     usage, WRITES NOTHING and prints only presence / percentages / a yes-no identity match - never the e-mail, tokens or the raw response.
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { installedSdkEntry } from "./employee-installer.mjs";
 import { loadDevice } from "./fleet-device.mjs";
 import { bindingFor, readSalt, SDK_IDENTITY_SIDECAR } from "./identity.mjs";
 import { pollerPaths, summarizePoller } from "./sdk-poller.mjs";
@@ -124,7 +126,10 @@ export async function liveCheck({ root, now = new Date(), probe = probeUsage, en
   if (!realness.realLooking) return { status: "sdk-looks-synthetic", detail: `a live check on this package would not prove anything: ${realness.reasons.join("; ")}` };
   const salt = readSalt(dataDir);
   if (!salt) return { status: "no-identity-salt", detail: "run the installer's observe step first (it creates the device-local salt)" };
-  const r = await probe({ account: cfg.label, timeoutMs, now, identitySalt: salt, env });
+  // The SDK that was just examined must be the SDK that is called: the default loader resolves relative to THIS script (a clone has none, or another one), so the install's own entry is passed explicitly
+  const entry = installedSdkEntry(appDir);
+  if (!entry) return { status: "sdk-not-installed", detail: "no importable entry file of the SDK was found under this install's app folder: run the installer's sdk step again" };
+  const r = await probe({ account: cfg.label, timeoutMs, now, identitySalt: salt, env, loadSdk: () => import(pathToFileURL(entry).href) });
   const binding = bindingFor(dataDir, cfg.label);
   const win = (w) => (w ? { present: true, percent: w.percent, resetsAt: w.resetsAt ?? null } : { present: false });
   const identity = r.identity?.ok ? { ok: true, matchesBinding: binding ? r.identity.fingerprint === binding.fingerprint : null } : { ok: false, reason: r.identity?.reason ?? (r.status === "ok" ? "not-read" : null) };

@@ -1,23 +1,23 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-30T12:07:48.073Z",
+  "builtAt": "2026-10-31T07:52:15.919Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "5b623541c29d346a80c47c20d73eb7183be8f2d167c5354034865868b064b5f0",
-      "size": 9321
+      "sha256": "ae0094bd49f222501ec0c47161aa7beab156343d6289e3c93e92740ebc6f5c0b",
+      "size": 11395
     },
     "README.md": {
       "sha256": "e04a48332758700a99889908d67582318130c6a08ca749df7cab70044910fddd",
       "size": 515
     },
     "START_HERE_AI.md": {
-      "sha256": "5b623541c29d346a80c47c20d73eb7183be8f2d167c5354034865868b064b5f0",
-      "size": 9321
+      "sha256": "ae0094bd49f222501ec0c47161aa7beab156343d6289e3c93e92740ebc6f5c0b",
+      "size": 11395
     },
     "join.json": {
       "sha256": "db76e8c633ecb7eb9537a1ef0e86d424a226c75b26d9077e41edf48fee5cf258",
@@ -28,8 +28,8 @@
       "size": 133
     },
     "scripts/employee-install.mjs": {
-      "sha256": "3c50f609707f6a93cbcaf27fed3c8b5cf0f4416a6313ccb230991f831fb690ac",
-      "size": 9297
+      "sha256": "f0dc13bc2412ef43ae36691c406584fb3142bb5f68ae55e3d84b7f6f82eae0e3",
+      "size": 10655
     },
     "scripts/employee-poll.mjs": {
       "sha256": "f8992dd4d5caa6327a2207a5eda3b8139490e76019e8d3b1392233cc672de608",
@@ -52,8 +52,8 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "cd66d4371e8264968628afaf122486525fe9e934751a1544c4ccb4c75ab301f0",
-      "size": 47857
+      "sha256": "31a9df20a487c1732013a963a899c6da581b1db4f0463e8a525c345e8da7c32d",
+      "size": 55985
     },
     "src/fleet-client.mjs": {
       "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",
@@ -80,8 +80,8 @@
       "size": 14042
     },
     "src/live-evidence.mjs": {
-      "sha256": "8517baf9f9b2e78ea9da00334e9a5adac740b8d0ccf0f70e934272ea99daf1df",
-      "size": 9439
+      "sha256": "b2854431dde463e5561958aa5bd10cd9eb3f99df740a879b3acaf1fcfb4fec5d",
+      "size": 10019
     },
     "src/model.mjs": {
       "sha256": "7ccb01b05f36c1365b36cfd896e59397da9a60df46f2a4b6cd6179d560bceb26",

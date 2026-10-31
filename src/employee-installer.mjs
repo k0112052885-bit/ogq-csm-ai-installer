@@ -4,6 +4,7 @@
 // the usage reading fresh and produce signed reading files. What it never does: contact the admin or any server, send Slack messages, read or write Claude settings
 // or credentials, hold any admin secret or signing key, or install anything without a named consent. Enrollment is NEVER automatic: the device stays
 // PENDING_ADMIN_APPROVAL until the admin approves it and the signed approval file comes back (by hand, or through an optional shared drop folder).
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -26,6 +27,7 @@ export const POLL_MINUTES = 15;
 export const TICK_MINUTES = 30;
 export const SCRIPT = "scripts/employee-install.mjs";
 export const CONSENTS = {
+  all: "Do ALL of the following on this Mac, without asking again at each step: (1) copy the installer code into a private folder in your home directory (nothing outside it is changed); (2) download the pinned Claude Agent SDK 0.3.301 from the npm registry into that folder (needs internet); (3) make ONE identity-only call to the Claude SDK to see which Claude account is logged in on this Mac (no prompt is sent, no usage request; your e-mail is never stored, only a salted fingerprint); (4) count the Claude account that is logged in on THIS Mac right now for this install; (5) register this Mac with the owner's dashboard (it sends ONLY a new public key, that salted fingerprint and a neutral short name; it stays PENDING until the owner approves it - nothing is approved automatically, and the owner decides which subscription it counts for); (6) install two background agents (launchd) that ask the Claude SDK for your plan usage every 15 minutes (no prompt is sent) and send signed usage percentages and reset times to the owner's dashboard once approved. You can remove everything later with the uninstall command.",
   install: "Copy the package code into a private folder in your home directory (nothing outside it is changed)?",
   sdk: "Download the pinned Claude Agent SDK 0.3.301 from the npm registry into that folder (needs internet)?",
   observe: "Make ONE identity-only call to the Claude SDK to see which Claude account is logged in on this Mac? (No prompt is sent, no usage request, your e-mail is never stored: only a salted fingerprint.)",
@@ -69,7 +71,14 @@ export function makeCtx(o = {}) {
     agentsDir: path.resolve(o.agentsDir ?? path.join(o.home ?? os.homedir(), "Library", "LaunchAgents")),
     run: o.run ?? realRun,
     fetch: o.fetch ?? globalThis.fetch,
+    sleep: o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    hasCommand: o.hasCommand ?? realHasCommand,
   };
+}
+/** Is `cmd` runnable from this Mac's PATH (for prerequisites such as npm)? */
+function realHasCommand(cmd) {
+  const r = spawnSync(cmd, ["--version"], { encoding: "utf8", timeout: 15000, env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+  return r.status === 0;
 }
 async function realRun(cmd, args, opts = {}) {
   const { spawnSync } = await import("node:child_process");
@@ -151,6 +160,8 @@ export function preflight({ packageDir, kitDir = null, join = null, expectFinger
   const add = (id, ok, detail, level = "required") => checks.push({ id, ok, detail, level });
   const major = Number(process.versions.node.split(".")[0]);
   add("node", major >= 20, `Node ${process.versions.node} (20 or newer needed)`);
+  const npmOk = typeof ctx.hasCommand === "function" ? ctx.hasCommand("npm") : true;
+  add("npm", npmOk, npmOk ? "npm is available (the SDK step needs it)" : "npm was not found on PATH: install Node.js from https://nodejs.org (it includes npm) before the SDK step, or give an offline copy with --sdk-from <folder>", "later");
   add("platform", ctx.platform === "darwin", ctx.platform === "darwin" ? "macOS: launchd agents are available" : `${ctx.platform}: background agents cannot be installed (manual runs only)`, "agents");
   const v = verifyManifest(packageDir);
   add("package-integrity", v.ok, v.ok ? `${Object.keys(v.manifest.files).length} files verified against MANIFEST.json` : v.problems.slice(0, 5).join("; "));
@@ -312,8 +323,30 @@ export function enroll({ ctx }) {
  * Self-service registration (link onboarding): the join step of a package installed with --server/--label. Sends the public key + login tag + alias to the dashboard, which can only queue
  * it as PENDING while the owner has opened registration. From then on the background report agent polls for the owner's signed approval and accepts it (auto-finalize), then collects.
  */
-export async function joinRemote({ ctx }) {
+export class RegistrationClosed extends Error {
+  constructor() {
+    super("the owner has not opened registration (or the window ended): ask them to open it in the dashboard, then run join again");
+  }
+}
+
+/**
+ * `waitMinutes` > 0: while the owner's registration window is closed, ask again every `intervalSeconds` (default 30) for that long - it keeps trying ONLY on "closed" and stops at the first
+ * accepted request or any other answer. Waiting changes nothing about trust: the request is still only PENDING and the owner still approves it.
+ */
+export async function joinRemote({ ctx, waitMinutes = 0, intervalSeconds = 30 }) {
   need(ctx, "join");
+  const attempts = Math.floor((Math.max(0, waitMinutes) * 60) / Math.max(5, intervalSeconds));
+  for (let i = 0; ; i++) {
+    try {
+      return { ...(await joinOnce({ ctx })), waitedAttempts: i };
+    } catch (e) {
+      if (!(e instanceof RegistrationClosed) || i >= attempts) throw e;
+      await ctx.sleep(Math.max(5, intervalSeconds) * 1000);
+    }
+  }
+}
+
+async function joinOnce({ ctx }) {
   const L = layout(ctx.root);
   const cfg = readJson(L.config);
   if (!cfg) throw new Error("install the package first");
@@ -322,7 +355,7 @@ export async function joinRemote({ ctx }) {
   const base = validateIngestUrl(cfg.ingestUrl);
   const r = await joinDevice({ deviceDir: L.device, sourceDir: L.data, label: cfg.label, now: ctx.now, submit: (req) => submitJoin(base, req, { fetchImpl: ctx.fetch }) });
   if (!r.joined) {
-    if (r.status === 403) throw new Error("the owner has not opened registration (or the window ended): ask them to open it in the dashboard, then run join again");
+    if (r.status === 403) throw new RegistrationClosed();
     if (r.status === 429) throw new Error("registration is busy or full right now: try again later");
     throw new Error(`could not register (${r.reason}${r.status ? `, status ${r.status}` : ""}): nothing was saved, run join again`);
   }
@@ -710,4 +743,77 @@ export async function uninstall({ ctx, purge = false }) {
     writePrivate(L.installState, { ...(readJson(L.installState) ?? {}), uninstalledAt: ctx.now.toISOString() });
   }
   return { removed, purged: purge === true, kept: purge ? [] : ["device key", "login link", "settings", "readings"] };
+}
+
+// ------------------------------------------------------------------ one command, one consent
+
+/**
+ * The whole link installation in ONE call after ONE consolidated consent (`ctx.consent.all`, whose text lists every action): preflight -> install -> SDK -> identify the logged-in
+ * Claude account -> link it -> register with the owner's dashboard (PENDING) -> background agents. It stops at the first step that cannot continue and says which step and why; running it again
+ * continues where it stopped (every step is idempotent and already-done steps are skipped). It does NOT and cannot approve anything: the owner opens the registration window and approves
+ * the device in the dashboard; the agents pick the signed approval up by themselves. Only the six consents of `all` are granted - never enroll / configure / transport / update / uninstall.
+ * `hooks` ({ observePreflight, observeProbe }) exist for tests only.
+ */
+export async function setupAll({ packageDir, join, ctx, kitDir = null, expectFingerprint = null, waitMinutes = 0, intervalSeconds = 30, sdkFrom = null, hooks = {} }) {
+  need(ctx, "all");
+  if (!join) throw new Error("setup needs an intake address: the repository's join.json (built with package-code-only.mjs --server) or --server <address> [--label <name>]");
+  const c = { ...ctx, consent: { ...ctx.consent, install: true, sdk: true, observe: true, bind: true, join: true, agents: true } };
+  const L = layout(c.root);
+  const steps = [];
+  const done = (step, extra = {}) => steps.push({ step, ok: true, ...extra });
+  const stop = (step, error, extra = {}) => ({ ok: false, step, error: String(error).slice(0, 300), steps, ...extra, rerun: "run the same setup command again after fixing this: it continues where it stopped" });
+  const pf = preflight({ packageDir, kitDir, join, expectFingerprint, ctx: c });
+  if (!pf.ok) return stop("preflight", "preflight failed", { checks: pf.checks.filter((x) => !x.ok && x.level === "required") });
+  done("preflight", { npm: pf.checks.find((x) => x.id === "npm")?.ok === true });
+  let r;
+  try {
+    r = installApp({ packageDir, kitDir, join, ctx: c });
+  } catch (e) {
+    return stop("install", e.message);
+  }
+  done("install", { alreadyInstalled: r.alreadyInstalled });
+  const have = sdkAt(L.app);
+  if (have.installed && have.version === REFERENCE_VERSION && have.compat.ok) done("sdk", { skipped: "the pinned SDK is already installed" });
+  else {
+    try {
+      const s = await installSdk({ ctx: c, from: sdkFrom });
+      if (!s.installed || !s.pinnedMatches || !s.compatible) return stop("sdk", `the installed SDK is not usable (version ${s.version ?? "unknown"}, pinned ${REFERENCE_VERSION}, compatible ${s.compatible})`);
+      done("sdk", { version: s.version });
+    } catch (e) {
+      return stop("sdk", e.message, { hint: "npm and internet access are needed (Node.js from nodejs.org includes npm), or give an offline copy with --sdk-from <folder>" });
+    }
+  }
+  if (loadDevice(L.device)) done("register", { skipped: "this Mac is already registered", note: "identify / link / register skipped" });
+  else {
+    try {
+      const o = await observeLogin({ ctx: c, live: true, ...(hooks.observePreflight ? { preflight: hooks.observePreflight } : {}), ...(hooks.observeProbe ? { probe: hooks.observeProbe } : {}) });
+      if (o.outcome !== "observed") return stop("observe", `the Claude login could not be identified (${o.outcome}${o.reason ?? o.status ? `: ${o.reason ?? o.status}` : ""}). Is Claude Code logged in on this Mac${c.root.includes(".ogq-csm-") ? " (for a second account: under its own --claude-config-dir)" : ""}?`);
+      if (o.emailAvailable !== true) return stop("observe", "this Claude login exposes no e-mail the SDK can fingerprint (for example a non-first-party provider): it cannot be linked", { note: "stop and tell the owner" });
+      done("observe", { loginTag: o.tag ?? null });
+    } catch (e) {
+      return stop("observe", e.message);
+    }
+    try {
+      bindLogin({ ctx: c });
+      done("link");
+    } catch (e) {
+      return stop("link", e.message);
+    }
+    try {
+      const j = await joinRemote({ ctx: c, waitMinutes, intervalSeconds });
+      done("register", { deviceId: j.deviceId, waitedAttempts: j.waitedAttempts });
+    } catch (e) {
+      if (e instanceof RegistrationClosed) return stop("register", e.message, { hint: "add --wait-minutes 30 to keep asking until the owner opens the window" });
+      return stop("register", e.message);
+    }
+  }
+  try {
+    const a = await installAgents({ ctx: c });
+    done("agents", { agents: a.agents });
+  } catch (e) {
+    return stop("agents", e.message);
+  }
+  const st = await status({ ctx: c });
+  const state = readJson(L.installState);
+  return { ok: true, steps, alias: readJson(L.config)?.label ?? null, verificationCode: state?.verificationCode ?? null, phase: st.phase, pending: st.pending, warnings: st.warnings, tell: st.phase === "PENDING_ADMIN_APPROVAL" ? `Tell the human: this Mac is registered as "${readJson(L.config)?.label}" and is waiting for the owner. Give the owner this alias and the verification code ${state?.verificationCode}; the owner enters the code in the dashboard and chooses the account. Nothing more is needed here: the background agents pick up the approval and start sending readings by themselves.` : `State: ${st.phase}.`, next: st.next };
 }

@@ -2,6 +2,9 @@
 // Single entrypoint of the employee package. Every command prints ONE JSON line { ok, step, ..., next } so an AI agent can drive it; step-by-step instructions
 // are in AGENT_INSTALL.md. Nothing is changed without its named consent flag, nothing is sent anywhere, and enrollment always waits for the admin.
 //   node scripts/employee-install.mjs preflight [--expect-fingerprint <12 hex from the admin>] [--kit-dir <private device kit>]   read-only checks (code-only package: --kit-dir also on install)
+//   node scripts/employee-install.mjs setup [--consent-all] [--wait-minutes 30] [--profile b --claude-config-dir /abs/.claude-b] [--sdk-from DIR]
+//                                          the WHOLE link installation after ONE consent: without --consent-all it prints the consolidated question (needsConsent: "all") and exit code 2;
+//                                          with it: install, SDK, identify + link the logged-in Claude account, register (PENDING until the owner approves), background agents. Re-run to continue.
 //   ONE LINK: when the repository carries join.json (built with package-code-only.mjs --server), `install --consent-install` needs no other argument.
 //   LINK REGISTRATION (no kit, no invite): install --server https://dashboard.example.com --label <short name> [--profile b --claude-config-dir /abs/.claude-b] --consent-install
 //                                          ... then sdk, observe, bind as usual, then:  join --consent-join   (PENDING until the owner approves in the dashboard; agents auto-finalize)
@@ -21,14 +24,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import fs from "node:fs";
-import { bindLogin, configure, defaultRoot, enableTransport, enroll, finalize, finalizeRemote, installAgents, installApp, installSdk, joinRemote, layout, makeCtx, NeedsConsent, observeLogin, PROFILE_RE, preflight, resolveJoin, status, syncRemote, tick, uninstall, update } from "../src/employee-installer.mjs";
+import { bindLogin, configure, defaultRoot, enableTransport, enroll, finalize, finalizeRemote, installAgents, installApp, installSdk, joinRemote, layout, makeCtx, NeedsConsent, observeLogin, PROFILE_RE, preflight, resolveJoin, setupAll, status, syncRemote, tick, uninstall, update } from "../src/employee-installer.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const out = (o) => console.log(JSON.stringify(o));
-const CONSENT_FLAGS = ["install", "sdk", "observe", "bind", "enroll", "join", "configure", "transport", "agents", "update", "uninstall"];
+const CONSENT_FLAGS = ["all", "install", "sdk", "observe", "bind", "enroll", "join", "configure", "transport", "agents", "update", "uninstall"];
 
 try {
-  const options = { server: { type: "string" }, label: { type: "string" }, profile: { type: "string" }, "claude-config-dir": { type: "string" }, root: { type: "string" }, "package-dir": { type: "string" }, "kit-dir": { type: "string" }, "expect-fingerprint": { type: "string" }, "sdk-from": { type: "string" }, approval: { type: "string" }, "drop-dir": { type: "string" }, "ingest-url": { type: "string" }, "auto-finalize": { type: "boolean" }, "agents-dir": { type: "string" }, purge: { type: "boolean" } };
+  const options = { "wait-minutes": { type: "string" }, server: { type: "string" }, label: { type: "string" }, profile: { type: "string" }, "claude-config-dir": { type: "string" }, root: { type: "string" }, "package-dir": { type: "string" }, "kit-dir": { type: "string" }, "expect-fingerprint": { type: "string" }, "sdk-from": { type: "string" }, approval: { type: "string" }, "drop-dir": { type: "string" }, "ingest-url": { type: "string" }, "auto-finalize": { type: "boolean" }, "agents-dir": { type: "string" }, purge: { type: "boolean" } };
   for (const c of CONSENT_FLAGS) options[`consent-${c}`] = { type: "boolean" };
   const { values, positionals } = parseArgs({ allowPositionals: true, options });
   const [cmd = "status"] = positionals;
@@ -59,7 +62,14 @@ try {
       process.exit(1);
     }
     out(await withNext("install", installApp({ packageDir, kitDir, join, ctx })));
-  } else if (cmd === "join") out(await withNext("join", await joinRemote({ ctx })));
+  } else if (cmd === "setup") {
+    // ONE command after ONE consolidated consent (--consent-all): install -> SDK -> identify -> link -> register (PENDING) -> background agents. Never approves anything.
+    const wait = values["wait-minutes"] === undefined ? 0 : Number(values["wait-minutes"]);
+    if (!Number.isFinite(wait) || wait < 0 || wait > 180) throw new Error("--wait-minutes must be 0-180");
+    const r = await setupAll({ packageDir, kitDir, join, ctx, expectFingerprint: values["expect-fingerprint"] ?? null, waitMinutes: wait, sdkFrom: values["sdk-from"] ?? null });
+    out({ step: "setup", ...r });
+    if (!r.ok) process.exit(1);
+  } else if (cmd === "join") out(await withNext("join", await joinRemote({ ctx, waitMinutes: values["wait-minutes"] === undefined ? 0 : Math.min(180, Math.max(0, Number(values["wait-minutes"]) || 0)) })));
   else if (cmd === "sdk") out(await withNext("sdk", await installSdk({ ctx, from: values["sdk-from"] ?? null })));
   else if (cmd === "observe") {
     const r = await observeLogin({ ctx, live: true });
@@ -79,7 +89,7 @@ try {
   }
   else if (cmd === "update") out(await withNext("update", update({ ctx, packageDir })));
   else if (cmd === "uninstall") out({ ok: true, step: "uninstall", ...(await uninstall({ ctx, purge: values.purge === true })) });
-  else throw new Error("Usage: employee-install.mjs preflight|status|install|sdk|observe|bind|enroll|join|finalize|configure|install-agents|tick|update|uninstall (see AGENT_INSTALL.md)");
+  else throw new Error("Usage: employee-install.mjs preflight|status|setup|install|sdk|observe|bind|enroll|join|finalize|configure|install-agents|tick|update|uninstall (see AGENT_INSTALL.md)");
 } catch (e) {
   if (e instanceof NeedsConsent) {
     out({ ok: false, needsConsent: e.consent, question: e.question, rerun: `add --consent-${e.consent}` });
