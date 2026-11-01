@@ -163,6 +163,9 @@ export function preflight({ packageDir, kitDir = null, join = null, expectFinger
   const add = (id, ok, detail, level = "required") => checks.push({ id, ok, detail, level });
   const major = Number(process.versions.node.split(".")[0]);
   add("node", major >= 20, `Node ${process.versions.node} (20 or newer needed)`);
+  // the launchd agents run THIS exact Node binary: a version manager's per-version path stops working when that version is switched or removed
+  const versioned = /[\\/]\.(nvm|fnm|volta|asdf|nodenv|n)[\\/]|[\\/]\.local[\\/]share[\\/]fnm[\\/]/.test(String(ctx.execPath ?? ""));
+  add("node-path", true, versioned ? `the background agents will run this exact Node binary (${ctx.execPath}); if you later switch or remove that Node version they stop - run setup again after changing Node` : `the background agents will run ${ctx.execPath ?? "node"}`, "info");
   const npmOk = typeof ctx.hasCommand === "function" ? ctx.hasCommand("npm") : true;
   add("npm", npmOk, npmOk ? "npm is available (the SDK step needs it)" : "npm was not found on PATH: install Node.js from https://nodejs.org (it includes npm) before the SDK step, or give an offline copy with --sdk-from <folder>", "later");
   add("platform", ctx.platform === "darwin", ctx.platform === "darwin" ? "macOS: launchd agents are available" : `${ctx.platform}: background agents cannot be installed (manual runs only)`, "agents");

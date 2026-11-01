@@ -1,7 +1,7 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-11-01T01:17:03.694Z",
+  "builtAt": "2026-11-01T01:29:26.196Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
@@ -52,8 +52,8 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "17a758af816e343a7df4eda3b91bf72df0eeba1cbdd051ba9a9f9b04dc5ac67b",
-      "size": 57290
+      "sha256": "bf08f90b5c0da3d9e01ffd9c8ce0c32a22775d6962744db75bfe5a7f9df073b9",
+      "size": 57847
     },
     "src/fleet-client.mjs": {
       "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",
@@ -80,8 +80,8 @@
       "size": 14042
     },
     "src/live-evidence.mjs": {
-      "sha256": "b2854431dde463e5561958aa5bd10cd9eb3f99df740a879b3acaf1fcfb4fec5d",
-      "size": 10019
+      "sha256": "9c7f6c97fee29801aaf4458240e9ff5b524bea1f8841b0714c833e89ea850bf5",
+      "size": 10181
     },
     "src/model.mjs": {
       "sha256": "7ccb01b05f36c1365b36cfd896e59397da9a60df46f2a4b6cd6179d560bceb26",

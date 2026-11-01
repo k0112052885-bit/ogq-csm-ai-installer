@@ -137,6 +137,7 @@ export async function liveCheck({ root, now = new Date(), probe = probeUsage, en
   const weekly = win(r.raw?.weekly);
   return {
     status: r.status,
+    deviceId: loadDevice(path.join(root, "device"))?.deviceId ?? null, // lets the owner bind this live read to ONE registered device (a public id, not a secret)
     method: r.method,
     subscriptionType: r.subscriptionType,
     rateLimitsAvailable: r.rateLimitsAvailable,
