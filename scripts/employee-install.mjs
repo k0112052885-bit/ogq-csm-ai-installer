@@ -39,13 +39,23 @@ try {
   if (values.profile !== undefined && !PROFILE_RE.test(values.profile)) throw new Error("--profile must be 1-20 characters: lowercase letters, digits, dashes");
   // root: --root, else the profile's own folder, else the folder this installed copy lives in (so each install finds ITS settings), else ~/.ogq-csm
   const installedRoot = path.basename(HERE) === "scripts" && path.basename(path.dirname(HERE)) === "app" ? path.dirname(path.dirname(HERE)) : null;
-  const ctx = makeCtx({ root: values.root ?? (values.profile ? defaultRoot(values.profile) : installedRoot ?? undefined), consent, ...(values["agents-dir"] ? { agentsDir: values["agents-dir"] } : {}) });
+  const ctx = makeCtx({ root: values.root ?? (values.profile ? defaultRoot(values.profile) : installedRoot ?? undefined), consent, ...(values["agents-dir"] ? { agentsDir: values["agents-dir"] } : {}), ...(cmd === "setup" || cmd === "join" ? { progress: (m) => process.stderr.write(`${m}\n`) } : {}) });
   const packageDir = path.resolve(values["package-dir"] ?? path.join(HERE, ".."));
   const withNext = async (step, data) => ({ ok: true, step, ...data, next: (await status({ ctx })).next });
   const kitDir = values["kit-dir"] ?? null; // private per-device kit (invite.json + package-config.json) when the code came from a code-only package
   // link (self-service) registration: --server + --label, no kit and no invite; a second account on the same Mac adds --profile and its own --claude-config-dir
   // When the repository has a built-in address (join.json) nothing at all is needed from the human: the address comes from there and the alias is the installed one or a neutral generated one.
-  const join = resolveJoin({ server: values.server ?? null, label: values.label ?? null, profile: values.profile ?? null, claudeConfigDir: values["claude-config-dir"] ?? null, packageDir, kitDir, ctx, ...(cmd === "preflight" ? { randomHex: () => "xxxxxx" } : {}) }); // (preflight shows a placeholder alias: only install creates one)
+  // The Claude login the installer observes is the one in CLAUDE_CONFIG_DIR of THIS shell, but the background agents (launchd) do not inherit this shell: a first install made with that variable set
+  // therefore records it, so the agents read the SAME login. A re-run reuses what was recorded (resolveJoin); only a brand-new install adopts the variable.
+  const hasLinkInstall = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(layout(ctx.root).config, "utf8")).selfJoin === true;
+    } catch {
+      return false;
+    }
+  })();
+  const shellDir = !hasLinkInstall && path.isAbsolute(process.env.CLAUDE_CONFIG_DIR ?? "") ? process.env.CLAUDE_CONFIG_DIR : null;
+  const join = resolveJoin({ server: values.server ?? null, label: values.label ?? null, profile: values.profile ?? null, claudeConfigDir: values["claude-config-dir"] ?? shellDir, packageDir, kitDir, ctx, ...(cmd === "preflight" ? { randomHex: () => "xxxxxx" } : {}) }); // (preflight shows a placeholder alias: only install creates one)
   // an install bound to its own Claude config folder (second account) reads THAT login in every later step
   try {
     const saved = JSON.parse(fs.readFileSync(layout(ctx.root).config, "utf8"));

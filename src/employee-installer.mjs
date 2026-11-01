@@ -73,6 +73,7 @@ export function makeCtx(o = {}) {
     fetch: o.fetch ?? globalThis.fetch,
     sleep: o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
     hasCommand: o.hasCommand ?? realHasCommand,
+    progress: o.progress ?? null, // optional (message) => void: long steps tell a waiting AI agent they are alive (the CLI writes it to stderr; stdout stays one JSON line)
   };
 }
 /** Is `cmd` runnable from this Mac's PATH (for prerequisites such as npm)? */
@@ -152,7 +153,9 @@ export function resolveJoin({ server = null, label = null, profile = null, claud
   if (!address) return null;
   const installed = readJson(layout(ctx.root).config);
   const alias = label ?? (installed?.selfJoin === true && typeof installed.label === "string" ? installed.label : `ogq-${randomHex()}`);
-  return { server: address, label: alias, profile: profile ?? undefined, claudeConfigDir: claudeConfigDir ?? undefined };
+  // like the alias, the Claude login folder of an existing link install is reused when none is given (a re-run from another shell must be the SAME install, not a refused "different folder")
+  const loginDir = claudeConfigDir ?? (installed?.selfJoin === true && typeof installed.claudeConfigDir === "string" ? installed.claudeConfigDir : null);
+  return { server: address, label: alias, profile: profile ?? undefined, claudeConfigDir: loginDir ?? undefined };
 }
 
 export function preflight({ packageDir, kitDir = null, join = null, expectFingerprint = null, ctx }) {
@@ -341,6 +344,7 @@ export async function joinRemote({ ctx, waitMinutes = 0, intervalSeconds = 30 })
       return { ...(await joinOnce({ ctx })), waitedAttempts: i };
     } catch (e) {
       if (!(e instanceof RegistrationClosed) || i >= attempts) throw e;
+      ctx.progress?.(`waiting for the owner to open the registration window (try ${i + 1} of ${attempts}; asking again in ${Math.max(5, intervalSeconds)} s)`);
       await ctx.sleep(Math.max(5, intervalSeconds) * 1000);
     }
   }
@@ -755,12 +759,20 @@ export async function uninstall({ ctx, purge = false }) {
  * `hooks` ({ observePreflight, observeProbe }) exist for tests only.
  */
 export async function setupAll({ packageDir, join, ctx, kitDir = null, expectFingerprint = null, waitMinutes = 0, intervalSeconds = 30, sdkFrom = null, hooks = {} }) {
-  need(ctx, "all");
+  if (ctx.consent?.all !== true) {
+    // the consent question names WHERE the data will go: a human must never agree to "the owner's dashboard" without seeing the address
+    const e = new NeedsConsent("all");
+    if (join?.server) e.question = `${CONSENTS.all} THIS INSTALLATION SENDS ITS DATA ONLY TO: ${join.server}${join.claudeConfigDir ? ` (Claude login folder used: ${join.claudeConfigDir}${join.profile ? `, second-account profile "${join.profile}"` : ""})` : ""}.`;
+    throw e;
+  }
   if (!join) throw new Error("setup needs an intake address: the repository's join.json (built with package-code-only.mjs --server) or --server <address> [--label <name>]");
   const c = { ...ctx, consent: { ...ctx.consent, install: true, sdk: true, observe: true, bind: true, join: true, agents: true } };
   const L = layout(c.root);
   const steps = [];
-  const done = (step, extra = {}) => steps.push({ step, ok: true, ...extra });
+  const done = (step, extra = {}) => {
+    steps.push({ step, ok: true, ...extra });
+    c.progress?.(`setup: ${step} ${extra.skipped ? "(already done)" : "done"}`);
+  };
   const stop = (step, error, extra = {}) => ({ ok: false, step, error: String(error).slice(0, 300), steps, ...extra, rerun: "run the same setup command again after fixing this: it continues where it stopped" });
   const pf = preflight({ packageDir, kitDir, join, expectFingerprint, ctx: c });
   if (!pf.ok) return stop("preflight", "preflight failed", { checks: pf.checks.filter((x) => !x.ok && x.level === "required") });
@@ -815,5 +827,5 @@ export async function setupAll({ packageDir, join, ctx, kitDir = null, expectFin
   }
   const st = await status({ ctx: c });
   const state = readJson(L.installState);
-  return { ok: true, steps, alias: readJson(L.config)?.label ?? null, verificationCode: state?.verificationCode ?? null, phase: st.phase, pending: st.pending, warnings: st.warnings, tell: st.phase === "PENDING_ADMIN_APPROVAL" ? `Tell the human: this Mac is registered as "${readJson(L.config)?.label}" and is waiting for the owner. Give the owner this alias and the verification code ${state?.verificationCode}; the owner enters the code in the dashboard and chooses the account. Nothing more is needed here: the background agents pick up the approval and start sending readings by themselves.` : `State: ${st.phase}.`, next: st.next };
+  return { ok: true, steps, alias: readJson(L.config)?.label ?? null, verificationCode: state?.verificationCode ?? null, verify: `node ${path.join(L.app, "scripts", "employee-verify.mjs")}`, phase: st.phase, pending: st.pending, warnings: st.warnings, tell: st.phase === "PENDING_ADMIN_APPROVAL" ? `Tell the human: this Mac is registered as "${readJson(L.config)?.label}" and is waiting for the owner. Give the owner this alias and the verification code ${state?.verificationCode}; the owner enters the code in the dashboard and chooses the account. Nothing more is needed here: the background agents pick up the approval and start sending readings by themselves.` : `State: ${st.phase}.`, next: st.next };
 }

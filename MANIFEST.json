@@ -1,23 +1,23 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-10-31T07:52:15.919Z",
+  "builtAt": "2026-11-01T01:17:03.694Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "ae0094bd49f222501ec0c47161aa7beab156343d6289e3c93e92740ebc6f5c0b",
-      "size": 11395
+      "sha256": "3c70f7245c56c4cc800271771fd51ec2aaf8d65d3b7eaefa4a822c3ee0329bf8",
+      "size": 12084
     },
     "README.md": {
       "sha256": "e04a48332758700a99889908d67582318130c6a08ca749df7cab70044910fddd",
       "size": 515
     },
     "START_HERE_AI.md": {
-      "sha256": "ae0094bd49f222501ec0c47161aa7beab156343d6289e3c93e92740ebc6f5c0b",
-      "size": 11395
+      "sha256": "3c70f7245c56c4cc800271771fd51ec2aaf8d65d3b7eaefa4a822c3ee0329bf8",
+      "size": 12084
     },
     "join.json": {
       "sha256": "db76e8c633ecb7eb9537a1ef0e86d424a226c75b26d9077e41edf48fee5cf258",
@@ -28,8 +28,8 @@
       "size": 133
     },
     "scripts/employee-install.mjs": {
-      "sha256": "f0dc13bc2412ef43ae36691c406584fb3142bb5f68ae55e3d84b7f6f82eae0e3",
-      "size": 10655
+      "sha256": "1a7a9b25af61387732b9873c45711858e70cd003fef1ba8aefbf1d23d5c2d597",
+      "size": 11430
     },
     "scripts/employee-poll.mjs": {
       "sha256": "f8992dd4d5caa6327a2207a5eda3b8139490e76019e8d3b1392233cc672de608",
@@ -52,8 +52,8 @@
       "size": 5182
     },
     "src/employee-installer.mjs": {
-      "sha256": "31a9df20a487c1732013a963a899c6da581b1db4f0463e8a525c345e8da7c32d",
-      "size": 55985
+      "sha256": "17a758af816e343a7df4eda3b91bf72df0eeba1cbdd051ba9a9f9b04dc5ac67b",
+      "size": 57290
     },
     "src/fleet-client.mjs": {
       "sha256": "a0bb2f912875731292f2520aa72dfeaa79005b76a4d5af264bb1745142e93ae6",
