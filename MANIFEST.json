@@ -1,23 +1,23 @@
 {
   "schema": "csm-employee-package-manifest/v1",
   "version": "0.1.0",
-  "builtAt": "2026-11-01T01:29:26.196Z",
+  "builtAt": "2026-11-03T02:20:45.178Z",
   "files": {
     ".gitignore": {
       "sha256": "354822f5ec8791ff59441e5608cf7bff3110a54df8767175348de1b73a6ef62c",
       "size": 195
     },
     "AI_INSTALL.md": {
-      "sha256": "3c70f7245c56c4cc800271771fd51ec2aaf8d65d3b7eaefa4a822c3ee0329bf8",
-      "size": 12084
+      "sha256": "5731e36a34b4feb2ff04070e063083a9720e4a4b30debef147498e36c1fe4c7f",
+      "size": 16938
     },
     "README.md": {
-      "sha256": "e04a48332758700a99889908d67582318130c6a08ca749df7cab70044910fddd",
-      "size": 515
+      "sha256": "ef5c3a1a391ea6e4e26e39e5c7132dff534288eecd8bf28a8e76a03cf97e7a1f",
+      "size": 709
     },
     "START_HERE_AI.md": {
-      "sha256": "3c70f7245c56c4cc800271771fd51ec2aaf8d65d3b7eaefa4a822c3ee0329bf8",
-      "size": 12084
+      "sha256": "5731e36a34b4feb2ff04070e063083a9720e4a4b30debef147498e36c1fe4c7f",
+      "size": 16938
     },
     "join.json": {
       "sha256": "db76e8c633ecb7eb9537a1ef0e86d424a226c75b26d9077e41edf48fee5cf258",
